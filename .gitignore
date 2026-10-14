@@ -1,0 +1,8 @@
+# IR.21 documents and generated workbooks are confidential operator data. Keep them out of the repo.
+*.xml
+*.xlsx
+
+# Editor and OS noise
+.vscode/
+Thumbs.db
+.DS_Store

@@ -1,0 +1,527 @@
+<title>IR.21 Prefix Extractor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  /* Layout: one column of working panels, like a routing worksheet. Drop zone first, result ledger below. */
+  :root {
+    --bg: #f3f5f7;
+    --panel: #ffffff;
+    --ink: #16222c;
+    --ink-2: #4e5d69;
+    --ink-3: #8a97a2;
+    --line: #d5dce2;
+    --accent: #0f5c6e;
+    --accent-ink: #ffffff;
+    --accent-soft: #e2eff2;
+    --ok: #1f7a4d;
+    --ok-soft: #e3f3ea;
+    --warn: #9a4b00;
+    --warn-soft: #fbeedd;
+    --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-data: "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #10171d;
+      --panel: #182129;
+      --ink: #e6ecf0;
+      --ink-2: #a9b6c0;
+      --ink-3: #6f7e8a;
+      --line: #2a3640;
+      --accent: #5fb7c9;
+      --accent-ink: #0b1a1e;
+      --accent-soft: #1b3038;
+      --ok: #6fcf97;
+      --ok-soft: #173126;
+      --warn: #f0a860;
+      --warn-soft: #3a2816;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #10171d;
+    --panel: #182129;
+    --ink: #e6ecf0;
+    --ink-2: #a9b6c0;
+    --ink-3: #6f7e8a;
+    --line: #2a3640;
+    --accent: #5fb7c9;
+    --accent-ink: #0b1a1e;
+    --accent-soft: #1b3038;
+    --ok: #6fcf97;
+    --ok-soft: #173126;
+    --warn: #f0a860;
+    --warn-soft: #3a2816;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.5;
+    padding-block: 32px 48px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrap { max-width: 880px; margin: 0 auto; display: grid; gap: 24px; }
+
+  header { display: grid; gap: 6px; }
+  .eyebrow {
+    font-family: var(--font-data);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  h1 { margin: 0; font-size: 26px; font-weight: 600; line-height: 1.2; text-wrap: balance; }
+  header p { margin: 0; color: var(--ink-2); max-width: 62ch; }
+  header code, .rule code {
+    font-family: var(--font-data);
+    font-size: 0.92em;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .drop {
+    border: 1.5px dashed var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 36px 24px;
+    text-align: center;
+    display: grid;
+    gap: 10px;
+    justify-items: center;
+    cursor: pointer;
+    transition: border-color 120ms, background 120ms;
+  }
+  .drop:hover, .drop:focus-within { border-color: var(--accent); }
+  .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { font-weight: 600; }
+  .drop span { color: var(--ink-2); font-size: 14px; }
+  .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+  .btn {
+    font: inherit;
+    font-weight: 500;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-radius: 6px;
+    padding: 8px 16px;
+    cursor: pointer;
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:focus-visible, .drop:focus-within, .btn-ghost:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn-ghost {
+    font: inherit;
+    font-weight: 500;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn[disabled] { opacity: 0.5; cursor: default; }
+
+  .rule {
+    display: flex; flex-wrap: wrap; gap: 8px 18px;
+    font-size: 13px; color: var(--ink-2);
+  }
+
+  .results { display: grid; gap: 16px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .card-head {
+    display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .card-head .title { display: grid; gap: 2px; min-width: 0; flex: 1 1 240px; }
+  .card-head .name { font-weight: 600; overflow-wrap: anywhere; }
+  .card-head .meta { font-size: 13px; color: var(--ink-2); font-family: var(--font-data); }
+  .pill {
+    font-family: var(--font-data);
+    font-size: 12px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .pill.ok { background: var(--ok-soft); color: var(--ok); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .pill.example { background: var(--accent-soft); color: var(--accent); }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  .card-body { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(0, 2.2fr); }
+  @media (max-width: 640px) { .card-body { grid-template-columns: 1fr; } }
+  .prefixes { padding: 14px 18px; border-right: 1px solid var(--line); display: grid; gap: 8px; align-content: start; }
+  @media (max-width: 640px) { .prefixes { border-right: 0; border-bottom: 1px solid var(--line); } }
+  .label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+  .prefix-list {
+    font-family: var(--font-data);
+    font-variant-numeric: tabular-nums;
+    font-size: 15px;
+    display: grid;
+    gap: 2px;
+    margin: 0; padding: 0; list-style: none;
+  }
+  .prefix-list li { padding: 2px 0; border-bottom: 1px dotted var(--line); display: flex; gap: 16px; justify-content: space-between; }
+  .prefix-list li:last-child { border-bottom: 0; }
+  .prefix-list .sheet-head { color: var(--ink-3); font-size: 12px; letter-spacing: 0.04em; }
+  .prefix-list .owner { color: var(--ink-3); font-size: 13px; }
+  .prefix-list .owner.mvno, td.mvno { color: var(--warn); font-weight: 500; }
+
+  .ranges { padding: 14px 18px; display: grid; gap: 8px; min-width: 0; }
+  .table-scroll { overflow-x: auto; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-family: var(--font-data);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+  }
+  th, td { text-align: left; padding: 5px 10px 5px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { font-weight: 500; color: var(--ink-3); font-size: 12px; }
+  tr:last-child td { border-bottom: 0; }
+  td.prefix { color: var(--accent); font-weight: 500; }
+  td.net { font-family: var(--font-ui); color: var(--ink-2); max-width: 180px; white-space: normal; }
+
+  .note { padding: 12px 18px; font-size: 13px; color: var(--ink-2); border-top: 1px solid var(--line); }
+  .note.error { color: var(--warn); background: var(--warn-soft); }
+  .status { font-size: 13px; color: var(--ink-2); min-height: 1.4em; }
+  .status.error { color: var(--warn); }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">GSMA RAEX IR.21 · E.164 number series</div>
+    <h1>IR.21 Prefix Extractor</h1>
+    <p>Upload an IR.21 XML and get the operator's MSISDN prefixes as an Excel sheet with one <code>PrefixNumber</code> column.</p>
+  </header>
+
+  <label class="drop" id="drop" for="file" tabindex="0">
+    <input type="file" id="file" accept=".xml,text/xml,application/xml" multiple>
+    <strong>Drop IR.21 XML files here</strong>
+    <span>or click to choose. Each file becomes its own <em>Prefix.xlsx</em>.</span>
+    <span class="btn" aria-hidden="true">Choose XML</span>
+  </label>
+  <div class="status" id="status" aria-live="polite"></div>
+
+  <div class="rule">
+    <span>Rule: every <code>MSISDN_NumberRanges › NumberRange</code> gives <code>CC + NDC</code></span>
+    <span>Duplicates removed, sorted ascending</span>
+    <span>Ranges with <code>NetworkOwner = MVNO</code> get "MVNO" in a second column</span>
+    <span>GT and MSRN ranges are ignored</span>
+  </div>
+
+  <section class="results" id="results" aria-label="Results"></section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- Parsing ----------
+  function byLocalName(root, name) {
+    return Array.prototype.slice.call(root.getElementsByTagNameNS('*', name));
+  }
+  function textOf(parent, name) {
+    var el = byLocalName(parent, name)[0];
+    return el ? el.textContent.trim() : '';
+  }
+
+  // Pure: XML string -> { prefixes:number[], ranges:[], operator, tadig, created, error? }
+  function extractPrefixes(xmlText) {
+    var doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) {
+      return { error: 'This file is not well-formed XML.' };
+    }
+    var operator = textOf(doc, 'OrganisationName');
+    var tadig = textOf(doc, 'SenderTADIG');
+    var created = textOf(doc, 'FileCreationTimestamp');
+
+    // Name of the <Network> that encloses a block (an IR.21 may carry several networks, e.g. an MNO plus its MVNO).
+    function networkOf(node) {
+      var p = node.parentNode;
+      while (p && p.localName !== 'Network') p = p.parentNode;
+      if (!p) return '';
+      var name = '', code = '';
+      Array.prototype.forEach.call(p.childNodes || [], function (c) {
+        if (c.localName === 'NetworkName') name = c.textContent.trim();
+        if (c.localName === 'TADIGCode') code = c.textContent.trim();
+      });
+      return name && code ? name + ' (' + code + ')' : (name || code);
+    }
+
+    var ranges = [];
+    byLocalName(doc, 'MSISDN_NumberRanges').forEach(function (block) {
+      var network = networkOf(block);
+      byLocalName(block, 'RangeData').forEach(function (rd) {
+        var owner = textOf(rd, 'NetworkOwner');
+        byLocalName(rd, 'NumberRange').forEach(function (nr) {
+          var cc = textOf(nr, 'CC');
+          var ndc = textOf(nr, 'NDC');
+          if (!/^\d+$/.test(cc) || !/^\d+$/.test(ndc)) return;
+          ranges.push({
+            cc: cc, ndc: ndc,
+            start: textOf(nr, 'SN_RangeStart'),
+            stop: textOf(nr, 'SN_RangeStop'),
+            length: textOf(nr, 'RangeLength'),
+            owner: owner,
+            network: network,
+            prefix: cc + ndc
+          });
+        });
+      });
+    });
+
+    // One row per distinct prefix; a prefix is MVNO if any of its ranges is owned by an MVNO.
+    var byPrefix = {};
+    var prefixes = [];
+    ranges.forEach(function (r) {
+      var isMvno = /^MVNO$/i.test(r.owner);
+      if (!byPrefix[r.prefix]) {
+        byPrefix[r.prefix] = { prefix: r.prefix, mvno: isMvno };
+        prefixes.push(byPrefix[r.prefix]);
+      } else if (isMvno) {
+        byPrefix[r.prefix].mvno = true;
+      }
+    });
+    prefixes.sort(function (a, b) {
+      return a.prefix.length - b.prefix.length || (a.prefix < b.prefix ? -1 : a.prefix > b.prefix ? 1 : 0);
+    });
+    var hasMvno = prefixes.some(function (p) { return p.mvno; });
+
+    return { prefixes: prefixes, hasMvno: hasMvno, ranges: ranges, operator: operator, tadig: tadig, created: created };
+  }
+
+  function outputName(inputName) {
+    return inputName.replace(/\.xml$/i, '') + ' Prefix.xlsx';
+  }
+
+  // Column B (NetworkOwner) is added only when at least one prefix belongs to an MVNO.
+  function buildWorkbook(prefixes, hasMvno) {
+    var header = hasMvno ? ['PrefixNumber', 'NetworkOwner'] : ['PrefixNumber'];
+    var rows = [header].concat(prefixes.map(function (p) {
+      return hasMvno ? [Number(p.prefix), p.mvno ? 'MVNO' : ''] : [Number(p.prefix)];
+    }));
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 14 }, { wch: 14 }];
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  }
+
+  // ---------- Saving: Claude artifact downloads capability, else a plain browser download ----------
+  var downloadsNs = null, downloadsResolved = false;
+  function getDownloads() {
+    if (downloadsResolved) return Promise.resolve(downloadsNs);
+    if (!(window.claude && typeof window.claude.use === 'function')) {
+      downloadsResolved = true; return Promise.resolve(null);
+    }
+    return window.claude.use('downloads').then(function (ns) {
+      downloadsNs = ns || null; downloadsResolved = true; return downloadsNs;
+    }, function () { downloadsResolved = true; return null; });
+  }
+
+  function saveFile(filename, bytes) {
+    return getDownloads().then(function (dl) {
+      if (dl) {
+        return dl.save({ filename: filename, data: new Blob([bytes]) }).then(function () { return 'saved'; });
+      }
+      var blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      return 'saved';
+    });
+  }
+
+  // ---------- Rendering ----------
+  var results = document.getElementById('results');
+  var statusEl = document.getElementById('status');
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function renderResult(fileName, parsed, opts) {
+    opts = opts || {};
+    var card = el('article', 'card');
+    var head = el('div', 'card-head');
+    var title = el('div', 'title');
+    title.appendChild(el('div', 'name', outputName(fileName)));
+    var meta = [];
+    if (parsed.operator) meta.push(parsed.operator);
+    if (parsed.tadig) meta.push('TADIG ' + parsed.tadig);
+    if (parsed.created) meta.push(parsed.created.replace('T', ' ').replace('Z', ' UTC'));
+    meta.push('from ' + fileName);
+    title.appendChild(el('div', 'meta', meta.join(' · ')));
+    head.appendChild(title);
+
+    if (opts.example) head.appendChild(el('span', 'pill example', 'example'));
+    if (parsed.error) {
+      head.appendChild(el('span', 'pill warn', 'not parsed'));
+    } else {
+      head.appendChild(el('span', 'pill ' + (parsed.prefixes.length ? 'ok' : 'warn'),
+        parsed.prefixes.length + (parsed.prefixes.length === 1 ? ' prefix' : ' prefixes')));
+    }
+
+    var actions = el('div', 'actions');
+    var dlBtn = el('button', 'btn', 'Download .xlsx');
+    dlBtn.type = 'button';
+    dlBtn.disabled = !!parsed.error || !parsed.prefixes.length;
+    actions.appendChild(dlBtn);
+    head.appendChild(actions);
+    card.appendChild(head);
+
+    if (parsed.error) {
+      card.appendChild(el('div', 'note error', parsed.error + ' Export the IR.21 again from RAEX and retry.'));
+      results.prepend(card);
+      return;
+    }
+
+    var body = el('div', 'card-body');
+    var left = el('div', 'prefixes');
+    left.appendChild(el('div', 'label', parsed.hasMvno ? 'Sheet1 · columns A, B' : 'Sheet1 · column A'));
+    var list = el('ul', 'prefix-list');
+    var h = el('li', 'sheet-head');
+    h.appendChild(el('span', null, 'PrefixNumber'));
+    if (parsed.hasMvno) h.appendChild(el('span', 'owner', 'NetworkOwner'));
+    list.appendChild(h);
+    parsed.prefixes.forEach(function (p) {
+      var li = el('li');
+      li.appendChild(el('span', null, p.prefix));
+      if (parsed.hasMvno) li.appendChild(el('span', 'owner' + (p.mvno ? ' mvno' : ''), p.mvno ? 'MVNO' : ''));
+      list.appendChild(li);
+    });
+    left.appendChild(list);
+    body.appendChild(left);
+
+    var right = el('div', 'ranges');
+    right.appendChild(el('div', 'label', 'Source MSISDN ranges'));
+    var scroll = el('div', 'table-scroll');
+    var table = el('table');
+    var thead = el('thead'); var trh = el('tr');
+    ['Network', 'CC', 'NDC', 'SN start', 'SN stop', 'Len', 'Owner', 'Prefix'].forEach(function (t) { trh.appendChild(el('th', null, t)); });
+    thead.appendChild(trh); table.appendChild(thead);
+    var tbody = el('tbody');
+    parsed.ranges.forEach(function (r) {
+      var tr = el('tr');
+      tr.appendChild(el('td', 'net', r.network || '–'));
+      tr.appendChild(el('td', null, r.cc));
+      tr.appendChild(el('td', null, r.ndc));
+      tr.appendChild(el('td', null, r.start));
+      tr.appendChild(el('td', null, r.stop));
+      tr.appendChild(el('td', null, r.length));
+      tr.appendChild(el('td', /^MVNO$/i.test(r.owner) ? 'mvno' : null, r.owner || '–'));
+      tr.appendChild(el('td', 'prefix', r.prefix));
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    scroll.appendChild(table);
+    right.appendChild(scroll);
+    body.appendChild(right);
+    card.appendChild(body);
+
+    if (!parsed.prefixes.length) {
+      card.appendChild(el('div', 'note', 'No MSISDN_NumberRanges block was found. Check that this is a RAEX IR.21 file with a RoutingInfoSection.'));
+    }
+
+    dlBtn.addEventListener('click', function () {
+      dlBtn.disabled = true;
+      var original = dlBtn.textContent;
+      dlBtn.textContent = 'Preparing…';
+      var bytes;
+      try { bytes = buildWorkbook(parsed.prefixes, parsed.hasMvno); }
+      catch (e) { setStatus('Could not build the workbook: ' + e.message, true); dlBtn.disabled = false; dlBtn.textContent = original; return; }
+      saveFile(outputName(fileName), bytes).then(function () {
+        setStatus('Saved ' + outputName(fileName));
+      }, function (err) {
+        var code = err && err.code;
+        if (code === 'declined') setStatus('Download cancelled.');
+        else setStatus('Download failed' + (err && err.message ? ': ' + err.message : '.'), true);
+      }).then(function () { dlBtn.disabled = false; dlBtn.textContent = original; });
+    });
+
+    results.prepend(card);
+  }
+
+  function setStatus(msg, isError) {
+    statusEl.textContent = msg;
+    statusEl.className = 'status' + (isError ? ' error' : '');
+  }
+
+  // ---------- File intake ----------
+  var exampleCard = null;
+  function handleFiles(files) {
+    var list = Array.prototype.slice.call(files).filter(function (f) { return /\.xml$/i.test(f.name) || /xml/.test(f.type); });
+    if (!list.length) { setStatus('Choose an .xml file.', true); return; }
+    if (exampleCard) { exampleCard.remove(); exampleCard = null; }
+    setStatus('Reading ' + list.length + (list.length === 1 ? ' file…' : ' files…'));
+    var done = 0;
+    list.forEach(function (file) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        var parsed;
+        try { parsed = extractPrefixes(String(reader.result)); }
+        catch (e) { parsed = { error: 'Could not read this file: ' + e.message }; }
+        renderResult(file.name, parsed);
+        if (++done === list.length) setStatus('Ready. Click Download .xlsx on a result.');
+      };
+      reader.onerror = function () { renderResult(file.name, { error: 'The browser could not read this file.' }); };
+      reader.readAsText(file);
+    });
+  }
+
+  var input = document.getElementById('file');
+  var drop = document.getElementById('drop');
+  input.addEventListener('change', function () { handleFiles(input.files); input.value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); });
+  });
+  drop.addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files) handleFiles(e.dataTransfer.files); });
+  drop.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+  document.addEventListener('dragover', function (e) { e.preventDefault(); });
+  document.addEventListener('drop', function (e) { e.preventDefault(); });
+
+  // ---------- Example at rest: the WOM Colombia IR.21 that defined the rule ----------
+  var exampleXml =
+    '<TADIGRAEXIR21 xmlns="https://infocentre.gsm.org/TADIG-RAEX-IR21"><RAEXIR21FileHeader>' +
+    '<FileCreationTimestamp>2026-09-04T14:03:24Z</FileCreationTimestamp><SenderTADIG>COLWO</SenderTADIG></RAEXIR21FileHeader>' +
+    '<OrganisationInfo><OrganisationName>WOM Colombia</OrganisationName></OrganisationInfo>' +
+    '<CCITT_E164_NumberSeries><MSISDN_NumberRanges>' +
+    '<RangeData><NumberRange><CC>57</CC><NDC>302</NDC><SN_RangeStart>4700000</SN_RangeStart><SN_RangeStop>8699999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange></RangeData>' +
+    '<RangeData><NumberRange><CC>57</CC><NDC>323</NDC><SN_RangeStart>6000000</SN_RangeStart><SN_RangeStop>9999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange></RangeData>' +
+    '<RangeData><NumberRange><CC>57</CC><NDC>324</NDC><SN_RangeStart>1000000</SN_RangeStart><SN_RangeStop>1999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange></RangeData>' +
+    '<RangeData><NumberRange><CC>57</CC><NDC>324</NDC><SN_RangeStart>7000000</SN_RangeStart><SN_RangeStop>9999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange></RangeData>' +
+    '<RangeData><NumberRange><CC>57</CC><NDC>350</NDC><SN_RangeStart>2000000</SN_RangeStart><SN_RangeStop>8999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange></RangeData>' +
+    '</MSISDN_NumberRanges><GT_NumberRanges><RangeData><NumberRange><CC>57</CC><NDC>302</NDC><SN_RangeStart>5000000</SN_RangeStart><SN_RangeStop>5000999</SN_RangeStop></NumberRange></RangeData></GT_NumberRanges>' +
+    '</CCITT_E164_NumberSeries></TADIGRAEXIR21>';
+  renderResult('IR21_COLWO_WOM Colombia_20260904140324.xml', extractPrefixes(exampleXml), { example: true });
+  exampleCard = results.firstElementChild;
+  setStatus('Showing an example from a WOM Colombia IR.21. Drop your own file to replace it.');
+})();
+</script>
