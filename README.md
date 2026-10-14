@@ -52,9 +52,8 @@ assigned an owner from the report line.
 
 ## Output
 
-`Sheet1` with a `PrefixNumber` column of numeric values. When at least one prefix belongs to an
-MVNO range, a second column `NetworkOwner` is added with `MVNO` on those rows and blank
-otherwise. The CSV export (UTF-8 with BOM) carries prefix, owner, CC, NDC, SN block, parent
+`Sheet1` with two columns: `PrefixNumber` (numeric) and `NetworkOwner` (`MNO`, `MVNO` or
+`OTHER`; blank when the IR.21 gives no owner). The CSV export (UTF-8 with BOM) carries prefix, owner, CC, NDC, SN block, parent
 range, CC check, status, notes and shared_count.
 
 ## Files

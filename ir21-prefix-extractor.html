@@ -201,7 +201,7 @@
   <div class="rule">
     <span>Rule: <code>MSISDN_NumberRanges › NumberRange</code> gives <code>CC + NDC + SN</code>, expanded to decimal-aligned blocks</span>
     <span>CC checked against the header <code>MCC</code>, prefix length against <code>RangeLength</code></span>
-    <span><code>NetworkOwner = MVNO</code> goes in a second column</span>
+    <span>Excel columns: <code>PrefixNumber</code> and <code>NetworkOwner</code> (MNO / MVNO)</span>
     <span>GT and MSRN ranges are ignored</span>
   </div>
 
@@ -741,12 +741,16 @@
   /* =====================================================================
      Workbook / CSV content for one result
      ===================================================================== */
+  // Workbook rows: always two columns, the prefix and its owner (MNO / MVNO / OTHER, blank when unknown).
+  function ownerLabel(p) {
+    const known = p.owners.filter(function (o) { return o !== 'UNKNOWN'; });
+    return known.join('/');
+  }
   function prefixRows(index) {
     const hasMvno = index.some(function (p) { return p.mvno; });
-    const header = hasMvno ? ['PrefixNumber', 'NetworkOwner'] : ['PrefixNumber'];
-    return { hasMvno: hasMvno, rows: [header].concat(index.map(function (p) {
+    return { hasMvno: hasMvno, rows: [['PrefixNumber', 'NetworkOwner']].concat(index.map(function (p) {
       const num = p.prefix.length <= 15 ? Number(p.prefix) : p.prefix;
-      return hasMvno ? [num, p.mvno ? 'MVNO' : ''] : [num];
+      return [num, ownerLabel(p)];
     })) };
   }
   function prefixCsvRows(index) {
@@ -874,11 +878,11 @@
     const body = el('div', 'card-body');
     const left = el('div', 'prefixes');
     const pr = prefixRows(d.index);
-    left.appendChild(el('div', 'label', pr.hasMvno ? 'Sheet1 · columns A, B' : 'Sheet1 · column A'));
+    left.appendChild(el('div', 'label', 'Sheet1 · columns A, B'));
     const list = el('ul', 'prefix-list');
     const h = el('li', 'sheet-head');
     h.appendChild(el('span', null, 'PrefixNumber'));
-    if (pr.hasMvno) h.appendChild(el('span', 'owner', 'NetworkOwner'));
+    h.appendChild(el('span', 'owner', 'NetworkOwner'));
     list.appendChild(h);
     const LIMIT = 2000;
     d.index.slice(0, LIMIT).forEach(function (p) {
@@ -886,7 +890,7 @@
       const left1 = el('span', null, p.prefix);
       if (p.shared > 1) { const b = el('span', 'shared', '×' + p.shared); b.title = 'claimed by ' + p.shared + ' ranges'; left1.appendChild(b); }
       li.appendChild(left1);
-      if (pr.hasMvno) li.appendChild(el('span', 'owner' + (p.mvno ? ' mvno' : ''), p.mvno ? 'MVNO' : ''));
+      li.appendChild(el('span', 'owner' + (p.mvno ? ' mvno' : ''), ownerLabel(p)));
       list.appendChild(li);
     });
     left.appendChild(list);
