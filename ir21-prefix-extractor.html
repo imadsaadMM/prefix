@@ -1133,24 +1133,9 @@
     });
     qOut.addEventListener('click', function () { if (qOut.value) qOut.select(); });
 
-    // Example at rest: the WOM Colombia IR.21 that defined the rule.
-    const exampleXml =
-      '<TADIGRAEXIR21 xmlns="https://infocentre.gsm.org/TADIG-RAEX-IR21"><RAEXIR21FileHeader>' +
-      '<FileCreationTimestamp>2026-09-04T14:03:24Z</FileCreationTimestamp><SenderTADIG>COLWO</SenderTADIG></RAEXIR21FileHeader>' +
-      '<OrganisationInfo><OrganisationName>WOM Colombia</OrganisationName><CountryInitials>COL</CountryInitials>' +
-      '<TADIGSummaryList><TADIGSummaryItem><TADIGCode>COLWO</TADIGCode><NetworkProperties><MCC>732</MCC><MNC>360</MNC><NetworkType>Terrestrial</NetworkType></NetworkProperties></TADIGSummaryItem></TADIGSummaryList>' +
-      '<NetworkList><Network><TADIGCode>COLWO</TADIGCode><NetworkName>Partners Telecom Colombia S.A.S (PTC)</NetworkName><NetworkData><RoutingInfoSection><RoutingInfo>' +
-      '<CCITT_E164_NumberSeries><MSISDN_NumberRanges>' +
-      '<RangeData><NumberRange><CC>57</CC><NDC>302</NDC><SN_RangeStart>4700000</SN_RangeStart><SN_RangeStop>8699999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange><NetworkOwner>MNO</NetworkOwner><Location>Colombia</Location></RangeData>' +
-      '<RangeData><NumberRange><CC>57</CC><NDC>323</NDC><SN_RangeStart>6000000</SN_RangeStart><SN_RangeStop>9999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange><NetworkOwner>MNO</NetworkOwner><Location>Colombia</Location></RangeData>' +
-      '<RangeData><NumberRange><CC>57</CC><NDC>324</NDC><SN_RangeStart>1000000</SN_RangeStart><SN_RangeStop>1999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange><NetworkOwner>MNO</NetworkOwner><Location>Colombia</Location></RangeData>' +
-      '<RangeData><NumberRange><CC>57</CC><NDC>324</NDC><SN_RangeStart>7000000</SN_RangeStart><SN_RangeStop>9999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange><NetworkOwner>MNO</NetworkOwner><Location>Colombia</Location></RangeData>' +
-      '<RangeData><NumberRange><CC>57</CC><NDC>350</NDC><SN_RangeStart>2000000</SN_RangeStart><SN_RangeStop>8999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange><NetworkOwner>MNO</NetworkOwner><Location>Colombia</Location></RangeData>' +
-      '</MSISDN_NumberRanges><GT_NumberRanges><RangeData><NumberRange><CC>57</CC><NDC>302</NDC><SN_RangeStart>5000000</SN_RangeStart><SN_RangeStop>5000999</SN_RangeStop></NumberRange><NetworkOwner>MNO</NetworkOwner></RangeData></GT_NumberRanges>' +
-      '</CCITT_E164_NumberSeries></RoutingInfo></RoutingInfoSection></NetworkData></Network></NetworkList></OrganisationInfo></TADIGRAEXIR21>';
-    addResult('IR21_COLWO_WOM Colombia_20260904140324.xml', exampleXml, { example: true });
+    // The page starts empty. Loaded files live only in memory and are gone on refresh.
     renderAll();
-    setStatus('Showing an example from a WOM Colombia IR.21. Drop your own file to replace it.');
+    setStatus('Drop an IR.21 file or paste a table to start. Nothing is stored; a refresh clears everything.');
   }
 
   // Pure functions exposed for tests; the UI starts only inside a browser page.
