@@ -89,6 +89,15 @@
   .options .group { display: inline-flex; gap: 14px; align-items: center; flex-wrap: wrap; }
   .options .group-label { color: var(--ink-3); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
 
+  .quick { padding: 12px 18px; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 1.2fr); gap: 10px 24px; align-items: start; }
+  @media (max-width: 720px) { .quick { grid-template-columns: 1fr; } }
+  .quick-form { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 14px; color: var(--ink-2); }
+  .quick-form .group-label { color: var(--ink-3); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; flex-basis: 100%; }
+  .quick-form label { display: inline-flex; gap: 6px; align-items: center; }
+  .quick-form input { font: inherit; font-family: var(--font-data); font-size: 14px; width: 160px; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: var(--bg); color: var(--ink); }
+  .quick-form .status { flex-basis: 100%; }
+  .quick-out { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; }
+  .quick-out textarea { min-height: 92px; font-size: 14px; }
   .status { font-size: 13px; color: var(--ink-2); min-height: 1.4em; }
   .status.error { color: var(--err); }
 
@@ -195,6 +204,19 @@
         <input type="text" id="optMcc" inputmode="numeric" maxlength="3" placeholder="auto" title="Used for pasted tables. XML files carry their own MCC.">
       </span>
       <label><input type="checkbox" id="optShowDup" checked> Show removed rows</label>
+    </div>
+
+    <div class="quick">
+      <div class="quick-form">
+        <span class="group-label">Quick check</span>
+        <label>Start <input type="text" id="qStart" inputmode="numeric" placeholder="33641620000" autocomplete="off"></label>
+        <label>End <input type="text" id="qEnd" inputmode="numeric" placeholder="33641629599" autocomplete="off"></label>
+        <span class="status" id="qStatus">Type a full start and end number to get its covering prefixes.</span>
+      </div>
+      <div class="quick-out">
+        <textarea id="qOut" readonly rows="4" spellcheck="false" placeholder="Prefixes appear here" aria-label="Prefixes for the quick check range"></textarea>
+        <button class="btn-ghost" type="button" id="qCopy" disabled>Copy</button>
+      </div>
     </div>
   </div>
   <div class="status" id="status" aria-live="polite"></div>
@@ -1085,6 +1107,32 @@
     bind('optShowDup', 'showDup', 'checked'); bind('optLevel', 'level', 'value');
     const mccInput = document.getElementById('optMcc');
     mccInput.addEventListener('input', function () { state.opts.mcc = digitsOnly(mccInput.value); renderAll(); });
+
+    // Quick check: two full numbers in, covering prefixes out.
+    const qStart = document.getElementById('qStart'), qEnd = document.getElementById('qEnd');
+    const qOut = document.getElementById('qOut'), qStatus = document.getElementById('qStatus'), qCopy = document.getElementById('qCopy');
+    function quickCheck() {
+      // Accept "start-end" pasted into the start field.
+      const pair = qStart.value.match(/^\s*(\d[\d\s]*)\s*[–—-]\s*(\d[\d\s]*)\s*$/);
+      if (pair) { qStart.value = digitsOnly(pair[1]); qEnd.value = digitsOnly(pair[2]); }
+      const s = digitsOnly(qStart.value), e = digitsOnly(qEnd.value);
+      qOut.value = ''; qCopy.disabled = true;
+      if (!s && !e) { setStatus('Type a full start and end number to get its covering prefixes.', false, qStatus); return; }
+      if (!/^\d+$/.test(s) || !/^\d+$/.test(e)) { setStatus('Digits only.', true, qStatus); return; }
+      if (!s || !e) { setStatus('Enter both numbers.', false, qStatus); return; }
+      if (s.length !== e.length) { setStatus('Start and end must have the same number of digits (' + s.length + ' vs ' + e.length + ').', true, qStatus); return; }
+      if (BigInt(s) > BigInt(e)) { setStatus('Start is greater than end.', true, qStatus); return; }
+      const prefixes = expandRange('', '', s, e).map(function (p) { return p.prefix; });
+      qOut.value = prefixes.join('\n');
+      qCopy.disabled = false;
+      setStatus(prefixes.length + (prefixes.length === 1 ? ' prefix' : ' prefixes') + ' cover ' + s + '–' + e + '.', false, qStatus);
+    }
+    qStart.addEventListener('input', quickCheck);
+    qEnd.addEventListener('input', quickCheck);
+    qCopy.addEventListener('click', function () {
+      copyText(qOut.value).then(function () { toast('Copied ' + qOut.value.split('\n').length + ' prefixes'); }, function () { toast('Clipboard blocked by the browser'); });
+    });
+    qOut.addEventListener('click', function () { if (qOut.value) qOut.select(); });
 
     // Example at rest: the WOM Colombia IR.21 that defined the rule.
     const exampleXml =
