@@ -1,11 +1,9 @@
 ﻿<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>img{max-width:100%}[hidden]{display:none!important}</style></head><body>
 <title>IR.21 Prefix Extractor</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-  /* Layout: one column of working panels, like a routing worksheet. Drop zone first, result ledger below. */
+  /* Layout: one column of working panels, like a routing worksheet. Input first, one result card per loaded file.
+     Fully offline: system fonts only, no external scripts. */
   :root {
     --bg: #f3f5f7;
     --panel: #ffffff;
@@ -20,190 +18,135 @@
     --ok-soft: #e3f3ea;
     --warn: #9a4b00;
     --warn-soft: #fbeedd;
-    --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
-    --font-data: "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+    --err: #a3262b;
+    --err-soft: #fbe5e6;
+    --dup: #5b3fa3;
+    --dup-soft: #ece6f8;
+    --font-ui: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    --font-data: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       color-scheme: dark;
-      --bg: #10171d;
-      --panel: #182129;
-      --ink: #e6ecf0;
-      --ink-2: #a9b6c0;
-      --ink-3: #6f7e8a;
-      --line: #2a3640;
-      --accent: #5fb7c9;
-      --accent-ink: #0b1a1e;
-      --accent-soft: #1b3038;
-      --ok: #6fcf97;
-      --ok-soft: #173126;
-      --warn: #f0a860;
-      --warn-soft: #3a2816;
+      --bg: #10171d; --panel: #182129; --ink: #e6ecf0; --ink-2: #a9b6c0; --ink-3: #6f7e8a; --line: #2a3640;
+      --accent: #5fb7c9; --accent-ink: #0b1a1e; --accent-soft: #1b3038;
+      --ok: #6fcf97; --ok-soft: #173126; --warn: #f0a860; --warn-soft: #3a2816;
+      --err: #f08a8e; --err-soft: #3b1d1f; --dup: #b9a3f0; --dup-soft: #2a2340;
     }
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
-    --bg: #10171d;
-    --panel: #182129;
-    --ink: #e6ecf0;
-    --ink-2: #a9b6c0;
-    --ink-3: #6f7e8a;
-    --line: #2a3640;
-    --accent: #5fb7c9;
-    --accent-ink: #0b1a1e;
-    --accent-soft: #1b3038;
-    --ok: #6fcf97;
-    --ok-soft: #173126;
-    --warn: #f0a860;
-    --warn-soft: #3a2816;
+    --bg: #10171d; --panel: #182129; --ink: #e6ecf0; --ink-2: #a9b6c0; --ink-3: #6f7e8a; --line: #2a3640;
+    --accent: #5fb7c9; --accent-ink: #0b1a1e; --accent-soft: #1b3038;
+    --ok: #6fcf97; --ok-soft: #173126; --warn: #f0a860; --warn-soft: #3a2816;
+    --err: #f08a8e; --err-soft: #3b1d1f; --dup: #b9a3f0; --dup-soft: #2a2340;
   }
 
   * { box-sizing: border-box; }
   body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--ink);
-    font-family: var(--font-ui);
-    font-size: 15px;
-    line-height: 1.5;
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--font-ui); font-size: 15px; line-height: 1.5;
     padding-block: 32px 48px;
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
-  .wrap { max-width: 880px; margin: 0 auto; display: grid; gap: 24px; }
+  .wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 24px; }
 
-  header { display: grid; gap: 6px; }
-  .eyebrow {
-    font-family: var(--font-data);
-    font-size: 12px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-  }
+  header { display: grid; gap: 6px; grid-template-columns: 1fr auto; align-items: start; }
+  header > :not(.local) { grid-column: 1; }
+  .eyebrow { font-family: var(--font-data); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
   h1 { margin: 0; font-size: 26px; font-weight: 600; line-height: 1.2; text-wrap: balance; }
-  header p { margin: 0; color: var(--ink-2); max-width: 62ch; }
-  header code, .rule code {
-    font-family: var(--font-data);
-    font-size: 0.92em;
-    background: var(--accent-soft);
-    color: var(--accent);
-    padding: 1px 5px;
-    border-radius: 3px;
-  }
+  header p { margin: 0; color: var(--ink-2); max-width: 66ch; }
+  .local { grid-column: 2; grid-row: 1 / span 3; align-self: start; font-size: 12px; color: var(--ok); background: var(--ok-soft); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+  code { font-family: var(--font-data); font-size: 0.92em; background: var(--accent-soft); color: var(--accent); padding: 1px 5px; border-radius: 3px; }
 
+  .input-card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; display: grid; }
   .drop {
-    border: 1.5px dashed var(--line);
-    border-radius: 8px;
-    background: var(--panel);
-    padding: 36px 24px;
-    text-align: center;
-    display: grid;
-    gap: 10px;
-    justify-items: center;
-    cursor: pointer;
-    transition: border-color 120ms, background 120ms;
+    border: 1.5px dashed var(--line); border-radius: 8px 8px 0 0; padding: 30px 24px; text-align: center;
+    display: grid; gap: 8px; justify-items: center; cursor: pointer; transition: border-color 120ms, background 120ms; position: relative;
   }
   .drop:hover, .drop:focus-within { border-color: var(--accent); }
   .drop.over { border-color: var(--accent); background: var(--accent-soft); }
   .drop strong { font-weight: 600; }
   .drop span { color: var(--ink-2); font-size: 14px; }
   .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
-  .btn {
-    font: inherit;
-    font-weight: 500;
-    border: 1px solid var(--accent);
-    background: var(--accent);
-    color: var(--accent-ink);
-    border-radius: 6px;
-    padding: 8px 16px;
-    cursor: pointer;
-  }
+  .btn { font: inherit; font-weight: 500; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); border-radius: 6px; padding: 8px 16px; cursor: pointer; }
   .btn:hover { filter: brightness(1.08); }
-  .btn:focus-visible, .drop:focus-within, .btn-ghost:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .btn-ghost {
-    font: inherit;
-    font-weight: 500;
-    border: 1px solid var(--line);
-    background: transparent;
-    color: var(--ink);
-    border-radius: 6px;
-    padding: 6px 12px;
-    cursor: pointer;
-  }
-  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
   .btn[disabled] { opacity: 0.5; cursor: default; }
+  .btn-ghost { font: inherit; font-weight: 500; font-size: 14px; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn:focus-visible, .btn-ghost:focus-visible, .drop:focus-within, textarea:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  .rule {
-    display: flex; flex-wrap: wrap; gap: 8px 18px;
-    font-size: 13px; color: var(--ink-2);
-  }
+  .paste { padding: 14px 18px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+  .paste summary { cursor: pointer; font-weight: 500; color: var(--ink-2); font-size: 14px; }
+  textarea { width: 100%; min-height: 150px; font-family: var(--font-data); font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 10px; background: var(--bg); color: var(--ink); resize: vertical; white-space: pre; }
+  .paste-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  .options { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; font-size: 14px; color: var(--ink-2); }
+  .options label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+  .options input[type="text"], .options select { font: inherit; font-size: 14px; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; background: var(--bg); color: var(--ink); }
+  .options input[type="text"] { width: 70px; font-family: var(--font-data); }
+  .options .group { display: inline-flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .options .group-label { color: var(--ink-3); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+
+  .status { font-size: 13px; color: var(--ink-2); min-height: 1.4em; }
+  .status.error { color: var(--err); }
+
+  .rule { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--ink-2); }
 
   .results { display: grid; gap: 16px; }
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .card-head {
-    display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center;
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--line);
-  }
-  .card-head .title { display: grid; gap: 2px; min-width: 0; flex: 1 1 240px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .card-head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .card-head .title { display: grid; gap: 2px; min-width: 0; flex: 1 1 260px; }
   .card-head .name { font-weight: 600; overflow-wrap: anywhere; }
   .card-head .meta { font-size: 13px; color: var(--ink-2); font-family: var(--font-data); }
-  .pill {
-    font-family: var(--font-data);
-    font-size: 12px;
-    padding: 2px 9px;
-    border-radius: 999px;
-    white-space: nowrap;
-  }
+  .pill { font-family: var(--font-data); font-size: 12px; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
   .pill.ok { background: var(--ok-soft); color: var(--ok); }
   .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .pill.err { background: var(--err-soft); color: var(--err); }
+  .pill.dup { background: var(--dup-soft); color: var(--dup); }
   .pill.example { background: var(--accent-soft); color: var(--accent); }
   .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-  .card-body { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(0, 2.2fr); }
-  @media (max-width: 640px) { .card-body { grid-template-columns: 1fr; } }
+  .report { padding: 10px 18px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); }
+  .report .ok { color: var(--ok); } .report .warn { color: var(--warn); } .report .dup { color: var(--dup); } .report .err { color: var(--err); }
+
+  .card-body { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2.4fr); }
+  @media (max-width: 720px) { .card-body { grid-template-columns: 1fr; } }
   .prefixes { padding: 14px 18px; border-right: 1px solid var(--line); display: grid; gap: 8px; align-content: start; }
-  @media (max-width: 640px) { .prefixes { border-right: 0; border-bottom: 1px solid var(--line); } }
+  @media (max-width: 720px) { .prefixes { border-right: 0; border-bottom: 1px solid var(--line); } }
   .label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
-  .prefix-list {
-    font-family: var(--font-data);
-    font-variant-numeric: tabular-nums;
-    font-size: 15px;
-    display: grid;
-    gap: 2px;
-    margin: 0; padding: 0; list-style: none;
-  }
-  .prefix-list li { padding: 2px 0; border-bottom: 1px dotted var(--line); display: flex; gap: 16px; justify-content: space-between; }
+  .prefix-list { font-family: var(--font-data); font-variant-numeric: tabular-nums; font-size: 14px; display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; max-height: 520px; overflow: auto; }
+  .prefix-list li { padding: 2px 0; border-bottom: 1px dotted var(--line); display: flex; gap: 12px; justify-content: space-between; align-items: baseline; }
   .prefix-list li:last-child { border-bottom: 0; }
-  .prefix-list .sheet-head { color: var(--ink-3); font-size: 12px; letter-spacing: 0.04em; }
+  .prefix-list .sheet-head { color: var(--ink-3); font-size: 12px; letter-spacing: 0.04em; position: sticky; top: 0; background: var(--panel); }
   .prefix-list .owner { color: var(--ink-3); font-size: 13px; }
-  .prefix-list .owner.mvno, td.mvno { color: var(--warn); font-weight: 500; }
+  .prefix-list .owner.mvno, td.mvno, .owner-tag.mvno { color: var(--warn); font-weight: 500; }
+  .shared { font-size: 11px; background: var(--dup-soft); color: var(--dup); border-radius: 999px; padding: 0 6px; margin-left: 6px; }
+  .more { font-size: 12px; color: var(--ink-3); }
 
   .ranges { padding: 14px 18px; display: grid; gap: 8px; min-width: 0; }
-  .table-scroll { overflow-x: auto; }
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    font-family: var(--font-data);
-    font-variant-numeric: tabular-nums;
-    font-size: 13px;
-  }
-  th, td { text-align: left; padding: 5px 10px 5px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
-  th { font-weight: 500; color: var(--ink-3); font-size: 12px; }
+  .table-scroll { overflow: auto; max-height: 560px; }
+  table { border-collapse: collapse; width: 100%; font-family: var(--font-data); font-variant-numeric: tabular-nums; font-size: 13px; }
+  th, td { text-align: left; padding: 5px 10px 5px 0; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: top; }
+  th { font-weight: 500; color: var(--ink-3); font-size: 12px; position: sticky; top: 0; background: var(--panel); }
   tr:last-child td { border-bottom: 0; }
+  tbody tr:hover td { background: var(--bg); }
   td.prefix { color: var(--accent); font-weight: 500; }
-  td.net { font-family: var(--font-ui); color: var(--ink-2); max-width: 180px; white-space: normal; }
+  td.net { font-family: var(--font-ui); color: var(--ink-2); max-width: 170px; white-space: normal; }
+  tr.dup td { color: var(--ink-3); }
+  tr.dup td.idx { text-decoration: line-through; }
+  tr.dup td .kind { color: var(--dup); font-size: 11px; }
+  .st { font-size: 11px; padding: 1px 7px; border-radius: 999px; font-family: var(--font-data); }
+  .st.ok { background: var(--ok-soft); color: var(--ok); } .st.warn { background: var(--warn-soft); color: var(--warn); } .st.err { background: var(--err-soft); color: var(--err); }
+  .cc.ok { color: var(--ok); } .cc.warn { color: var(--warn); } .cc.err { color: var(--err); }
+  .inh { color: var(--ink-3); font-size: 10px; vertical-align: super; }
 
   .note { padding: 12px 18px; font-size: 13px; color: var(--ink-2); border-top: 1px solid var(--line); }
-  .note.error { color: var(--warn); background: var(--warn-soft); }
-  .status { font-size: 13px; color: var(--ink-2); min-height: 1.4em; }
-  .status.error { color: var(--warn); }
+  .note.error { color: var(--err); background: var(--err-soft); }
 
+  #toasts { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 6px; z-index: 9; }
+  .toast { background: var(--ink); color: var(--bg); font-size: 13px; padding: 8px 12px; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
@@ -211,319 +154,959 @@
   <header>
     <div class="eyebrow">GSMA RAEX IR.21 · E.164 number series</div>
     <h1>IR.21 Prefix Extractor</h1>
-    <p>Upload an IR.21 XML and get the operator's MSISDN prefixes as an Excel sheet with one <code>PrefixNumber</code> column.</p>
+    <p>Load an IR.21 XML, a table pasted from a PDF, or a CSV. The MSISDN ranges are validated, de-duplicated, and expanded into the minimal set of routing prefixes, ready to download as Excel or CSV.</p>
+    <span class="local">100% local · nothing is uploaded</span>
   </header>
 
-  <label class="drop" id="drop" for="file" tabindex="0">
-    <input type="file" id="file" accept=".xml,text/xml,application/xml" multiple>
-    <strong>Drop IR.21 XML files here</strong>
-    <span>or click to choose. Each file becomes its own <em>Prefix.xlsx</em>.</span>
-    <span class="btn" aria-hidden="true">Choose XML</span>
-  </label>
+  <div class="input-card">
+    <label class="drop" id="drop" for="file" tabindex="0">
+      <input type="file" id="file" accept=".xml,.csv,.tsv,.txt,text/xml,application/xml,text/csv,text/plain" multiple>
+      <strong>Drop IR.21 files here</strong>
+      <span>.xml, .csv, .tsv or .txt. Click to choose. Each file becomes its own result card and <em>Prefix.xlsx</em>.</span>
+      <span class="btn" aria-hidden="true">Choose file</span>
+    </label>
+
+    <details class="paste">
+      <summary>Paste a table instead (fixed-width PDF copy, CSV/TSV, or lines like <code>33 64162 0000 9599 MNO</code>)</summary>
+      <textarea id="pasteText" spellcheck="false" placeholder="CC  NDC   SN Range Start  SN Range Stop  Range Length  Prim. Intl. DPC  Sec. Intl. DPC  Network Owner&#10;33  162   350000          359999          11                                           MNO"></textarea>
+      <div class="paste-actions">
+        <button class="btn" type="button" id="pasteRun">Validate &amp; expand →</button>
+        <button class="btn-ghost" type="button" id="pasteClear">Clear</button>
+        <span class="status" id="pasteStatus"></span>
+      </div>
+    </details>
+
+    <div class="options">
+      <span class="group">
+        <span class="group-label">Prefix level</span>
+        <select id="optLevel">
+          <option value="cover">Minimal covering prefixes (CC+NDC+SN blocks)</option>
+          <option value="ndc">CC + NDC only</option>
+        </select>
+      </span>
+      <span class="group">
+        <span class="group-label">Duplicates</span>
+        <label><input type="checkbox" id="optExact" checked> Remove exact duplicates</label>
+        <label><input type="checkbox" id="optContained" checked> Remove contained ranges</label>
+        <label><input type="checkbox" id="optAdjacent"> Merge adjacent ranges</label>
+      </span>
+      <span class="group">
+        <span class="group-label">Header MCC</span>
+        <input type="text" id="optMcc" inputmode="numeric" maxlength="3" placeholder="auto" title="Used for pasted tables. XML files carry their own MCC.">
+      </span>
+      <label><input type="checkbox" id="optShowDup" checked> Show removed rows</label>
+    </div>
+  </div>
   <div class="status" id="status" aria-live="polite"></div>
 
   <div class="rule">
-    <span>Rule: every <code>MSISDN_NumberRanges › NumberRange</code> gives <code>CC + NDC</code></span>
-    <span>Duplicates removed, sorted ascending</span>
-    <span>Ranges with <code>NetworkOwner = MVNO</code> get "MVNO" in a second column</span>
+    <span>Rule: <code>MSISDN_NumberRanges › NumberRange</code> gives <code>CC + NDC + SN</code>, expanded to decimal-aligned blocks</span>
+    <span>CC checked against the header <code>MCC</code>, prefix length against <code>RangeLength</code></span>
+    <span><code>NetworkOwner = MVNO</code> goes in a second column</span>
     <span>GT and MSRN ranges are ignored</span>
   </div>
 
   <section class="results" id="results" aria-label="Results"></section>
 </div>
+<div id="toasts" aria-live="polite"></div>
 
 <script>
 (function () {
   'use strict';
 
-  // ---------- Parsing ----------
-  function byLocalName(root, name) {
-    return Array.prototype.slice.call(root.getElementsByTagNameNS('*', name));
+  /* =====================================================================
+     Reference data: country code ↔ MCC ↔ country
+     ===================================================================== */
+  const CC_TABLE = [
+    ['1', 'USA / Canada', 'USA', ['310', '311', '312', '313', '314', '315', '316', '302']],
+    ['7', 'Russia / Kazakhstan', 'RUS', ['250', '401']],
+    ['20', 'Egypt', 'EGY', ['602']], ['27', 'South Africa', 'ZAF', ['655']],
+    ['30', 'Greece', 'GRC', ['202']], ['31', 'Netherlands', 'NLD', ['204']], ['32', 'Belgium', 'BEL', ['206']],
+    ['33', 'France', 'FRA', ['208']], ['34', 'Spain', 'ESP', ['214']], ['36', 'Hungary', 'HUN', ['216']],
+    ['39', 'Italy', 'ITA', ['222']], ['40', 'Romania', 'ROU', ['226']], ['41', 'Switzerland', 'CHE', ['228']],
+    ['43', 'Austria', 'AUT', ['232']], ['44', 'United Kingdom', 'GBR', ['234', '235']], ['45', 'Denmark', 'DNK', ['238']],
+    ['46', 'Sweden', 'SWE', ['240']], ['47', 'Norway', 'NOR', ['242']], ['48', 'Poland', 'POL', ['260']],
+    ['49', 'Germany', 'DEU', ['262']], ['51', 'Peru', 'PER', ['716']], ['52', 'Mexico', 'MEX', ['334']],
+    ['53', 'Cuba', 'CUB', ['368']], ['54', 'Argentina', 'ARG', ['722']], ['55', 'Brazil', 'BRA', ['724']],
+    ['56', 'Chile', 'CHL', ['730']], ['57', 'Colombia', 'COL', ['732']], ['58', 'Venezuela', 'VEN', ['734']],
+    ['60', 'Malaysia', 'MYS', ['502']], ['61', 'Australia', 'AUS', ['505']], ['62', 'Indonesia', 'IDN', ['510']],
+    ['63', 'Philippines', 'PHL', ['515']], ['64', 'New Zealand', 'NZL', ['530']], ['65', 'Singapore', 'SGP', ['525']],
+    ['66', 'Thailand', 'THA', ['520']], ['81', 'Japan', 'JPN', ['440', '441']], ['82', 'South Korea', 'KOR', ['450']],
+    ['84', 'Vietnam', 'VNM', ['452']], ['86', 'China', 'CHN', ['460', '461']], ['90', 'Turkey', 'TUR', ['286']],
+    ['91', 'India', 'IND', ['404', '405', '406']], ['92', 'Pakistan', 'PAK', ['410']], ['94', 'Sri Lanka', 'LKA', ['413']],
+    ['212', 'Morocco', 'MAR', ['604']], ['213', 'Algeria', 'DZA', ['603']], ['216', 'Tunisia', 'TUN', ['605']],
+    ['234', 'Nigeria', 'NGA', ['621']], ['254', 'Kenya', 'KEN', ['639']], ['351', 'Portugal', 'PRT', ['268']],
+    ['353', 'Ireland', 'IRL', ['272']], ['358', 'Finland', 'FIN', ['244']], ['380', 'Ukraine', 'UKR', ['255']],
+    ['420', 'Czechia', 'CZE', ['230']], ['591', 'Bolivia', 'BOL', ['736']], ['593', 'Ecuador', 'ECU', ['740']],
+    ['595', 'Paraguay', 'PRY', ['744']], ['598', 'Uruguay', 'URY', ['748']], ['852', 'Hong Kong', 'HKG', ['454']],
+    ['880', 'Bangladesh', 'BGD', ['470']], ['886', 'Taiwan', 'TWN', ['466']], ['961', 'Lebanon', 'LBN', ['415']],
+    ['962', 'Jordan', 'JOR', ['416']], ['964', 'Iraq', 'IRQ', ['418']], ['965', 'Kuwait', 'KWT', ['419']],
+    ['966', 'Saudi Arabia', 'SAU', ['420']], ['968', 'Oman', 'OMN', ['422']], ['971', 'United Arab Emirates', 'ARE', ['424']],
+    ['972', 'Israel', 'ISR', ['425']], ['973', 'Bahrain', 'BHR', ['426']], ['974', 'Qatar', 'QAT', ['427']]
+  ];
+  const CC_BY_MCC = new Map();
+  CC_TABLE.forEach(function (row) {
+    const entry = { cc: row[0], country: row[1], iso: row[2], mccs: row[3] };
+    row[3].forEach(function (m) { CC_BY_MCC.set(m, entry); });
+  });
+
+  /* =====================================================================
+     Small helpers
+     ===================================================================== */
+  function normKey(s) { return String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function digitsOnly(s) { return String(s == null ? '' : s).replace(/\s+/g, '').trim(); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function fmtInt(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+
+  // Field aliases: normalised header labels / element names → record field.
+  const FIELD_ALIASES = {
+    cc: ['cc', 'countrycode'],
+    ndc: ['ndc', 'nationaldestinationcode'],
+    snStart: ['snrangestart', 'snstart', 'rangestart', 'start', 'snfrom', 'from'],
+    snStop: ['snrangestop', 'snstop', 'rangestop', 'rangeend', 'stop', 'end', 'snto', 'to'],
+    rangeLength: ['rangelength', 'length', 'len', 'prefixlength'],
+    owner: ['networkowner', 'owner', 'networkownertype', 'ownertype'],
+    location: ['location', 'region'],
+    notes: ['notes', 'note', 'comment', 'comments', 'remarks'],
+    snRange: ['snrange', 'range', 'sn'],
+    mcc: ['mcc']
+  };
+  function fieldFor(label) {
+    const k = normKey(label);
+    for (const f in FIELD_ALIASES) if (FIELD_ALIASES[f].indexOf(k) !== -1) return f;
+    return null;
   }
-  function textOf(parent, name) {
-    var el = byLocalName(parent, name)[0];
-    return el ? el.textContent.trim() : '';
+
+  /* NetworkOwner → MNO / MVNO / OTHER / UNKNOWN. NetworkType (Terrestrial…) is never consulted. */
+  function classifyOwner(raw) {
+    const v = String(raw == null ? '' : raw).trim();
+    if (!v) return 'UNKNOWN';
+    const k = v.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (k === 'MNO' || k === 'HPMN' || k === 'VPMN' || k === 'MOBILENETWORKOPERATOR') return 'MNO';
+    if (k === 'MVNO' || k === 'MOBILEVIRTUALNETWORKOPERATOR') return 'MVNO';
+    return 'OTHER';
   }
 
-  // Pure: XML string -> { prefixes:number[], ranges:[], operator, tadig, created, error? }
-  function extractPrefixes(xmlText) {
-    var doc = new DOMParser().parseFromString(xmlText, 'application/xml');
-    if (doc.getElementsByTagName('parsererror').length) {
-      return { error: 'This file is not well-formed XML.' };
-    }
-    var operator = textOf(doc, 'OrganisationName');
-    var tadig = textOf(doc, 'SenderTADIG');
-    var created = textOf(doc, 'FileCreationTimestamp');
+  let nextId = 1;
+  function makeRecord(f, source) {
+    const ownerRaw = f.owner == null ? '' : String(f.owner).trim();
+    return Object.freeze({
+      id: nextId++,
+      cc: digitsOnly(f.cc), ndc: digitsOnly(f.ndc),
+      snStart: digitsOnly(f.snStart), snStop: digitsOnly(f.snStop),
+      rangeLength: digitsOnly(f.rangeLength),
+      ownerRaw: ownerRaw, owner: classifyOwner(ownerRaw),
+      ownerSource: ownerRaw ? (f.ownerSource || 'element') : 'none',
+      location: f.location || '', notes: f.notes || '', network: f.network || '',
+      source: source
+    });
+  }
+  function splitSnRange(v) {
+    const m = String(v || '').match(/(\d+)\s*(?:[–—-]|\.\.|to)\s*(\d+)/i);
+    return m ? { snStart: m[1], snStop: m[2] } : null;
+  }
 
-    // Name of the <Network> that encloses a block (an IR.21 may carry several networks, e.g. an MNO plus its MVNO).
-    function networkOf(node) {
-      var p = node.parentNode;
-      while (p && p.localName !== 'Network') p = p.parentNode;
-      if (!p) return '';
-      var name = '', code = '';
-      Array.prototype.forEach.call(p.childNodes || [], function (c) {
-        if (c.localName === 'NetworkName') name = c.textContent.trim();
-        if (c.localName === 'TADIGCode') code = c.textContent.trim();
-      });
-      return name && code ? name + ' (' + code + ')' : (name || code);
+  /* =====================================================================
+     Parsers. Every parser returns { records, report }.
+     ===================================================================== */
+  function parseInput(rawText, fileName) {
+    const text = String(rawText).replace(/^﻿/, '');
+    const trimmed = text.trim();
+    if (!trimmed) throw new Error('The input is empty.');
+    if (trimmed.charAt(0) === '<') return parseXml(trimmed);
+    const lines = text.split(/\r?\n/);
+    if (lines.some(isFixedWidthHeader)) return parseFixedWidth(lines);
+    const first = lines.find(function (l) { return l.trim(); }) || '';
+    if (/[,;\t]/.test(first)) return parseDelimited(lines);
+    return parseFreeLines(lines);
+  }
+
+  // ---- XML (namespace-agnostic, local-name matching) ----
+  function localKey(node) { return normKey(node.localName || String(node.nodeName).split(':').pop()); }
+  function children(node) { return Array.prototype.slice.call(node.children || []); }
+  function descendants(node, out) {
+    out = out || [];
+    children(node).forEach(function (c) { out.push(c); descendants(c, out); });
+    return out;
+  }
+  function childByField(node, field) {
+    const keys = FIELD_ALIASES[field];
+    const kids = children(node);
+    for (let i = 0; i < kids.length; i++) if (keys.indexOf(localKey(kids[i])) !== -1) return kids[i];
+    return null;
+  }
+  function attrByField(node, field) {
+    const keys = FIELD_ALIASES[field];
+    const attrs = node.attributes || [];
+    for (let i = 0; i < attrs.length; i++) if (keys.indexOf(normKey(attrs[i].name)) !== -1) return attrs[i].value;
+    return undefined;
+  }
+  function fieldValue(node, field) {
+    const c = childByField(node, field);
+    if (c) return c.textContent.trim();
+    return attrByField(node, field);
+  }
+  function isRangeElement(node) {
+    return fieldValue(node, 'cc') !== undefined && fieldValue(node, 'ndc') !== undefined;
+  }
+  function firstText(all, key) {
+    for (let i = 0; i < all.length; i++) if (localKey(all[i]) === key) return all[i].textContent.trim();
+    return '';
+  }
+
+  function parseXml(text) {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    const pe = doc.getElementsByTagName('parsererror')[0];
+    if (pe) throw new Error('Not well-formed XML: ' + pe.textContent.trim().split('\n')[0]);
+
+    const all = descendants(doc.documentElement);
+    all.unshift(doc.documentElement);
+    const containers = all.filter(function (n) { return localKey(n) === 'msisdnnumberranges'; });
+    let rangeEls, mode;
+    if (containers.length) {
+      mode = 'xml-msisdn';
+      rangeEls = [];
+      containers.forEach(function (c) { descendants(c).forEach(function (n) { if (isRangeElement(n)) rangeEls.push(n); }); });
+    } else {
+      mode = 'xml-generic';
+      rangeEls = all.filter(isRangeElement);
     }
 
-    var ranges = [];
-    byLocalName(doc, 'MSISDN_NumberRanges').forEach(function (block) {
-      var network = networkOf(block);
-      byLocalName(block, 'RangeData').forEach(function (rd) {
-        var owner = textOf(rd, 'NetworkOwner');
-        byLocalName(rd, 'NumberRange').forEach(function (nr) {
-          var cc = textOf(nr, 'CC');
-          var ndc = textOf(nr, 'NDC');
-          if (!/^\d+$/.test(cc) || !/^\d+$/.test(ndc)) return;
-          ranges.push({
-            cc: cc, ndc: ndc,
-            start: textOf(nr, 'SN_RangeStart'),
-            stop: textOf(nr, 'SN_RangeStop'),
-            length: textOf(nr, 'RangeLength'),
-            owner: owner,
-            network: network,
-            prefix: cc + ndc
-          });
-        });
+    const ownerSources = {};
+    const records = rangeEls.map(function (nr) {
+      const f = {};
+      ['cc', 'ndc', 'snStart', 'snStop', 'rangeLength', 'location', 'notes'].forEach(function (k) {
+        const v = fieldValue(nr, k);
+        if (v !== undefined) f[k] = v;
       });
+      // Owner: on the range element, else climb up to 6 ancestors looking at their direct children.
+      let owner = fieldValue(nr, 'owner'), src = owner ? 'element' : 'none';
+      let p = nr.parentNode, level = 1;
+      while (!owner && p && p.nodeType === 1 && level <= 6) {
+        const o = fieldValue(p, 'owner');
+        if (o) { owner = o; src = level === 1 ? 'sibling' : 'inherited'; }
+        if (!f.location) { const l = fieldValue(p, 'location'); if (l && level === 1) f.location = l; }
+        if (!f.notes) { const n = fieldValue(p, 'notes'); if (n && level === 1) f.notes = n; }
+        p = p.parentNode; level++;
+      }
+      f.owner = owner; f.ownerSource = src;
+      ownerSources[src] = (ownerSources[src] || 0) + 1;
+      // Enclosing <Network>: name and TADIG code.
+      let q = nr.parentNode;
+      while (q && q.nodeType === 1 && localKey(q) !== 'network') q = q.parentNode;
+      if (q && q.nodeType === 1) {
+        const name = firstText(children(q), 'networkname'), code = firstText(children(q), 'tadigcode');
+        f.network = name && code ? name + ' (' + code + ')' : (name || code);
+      }
+      return makeRecord(f, mode);
     });
 
-    // One row per distinct prefix; a prefix is MVNO if any of its ranges is owned by an MVNO.
-    var byPrefix = {};
-    var prefixes = [];
-    ranges.forEach(function (r) {
-      var isMvno = /^MVNO$/i.test(r.owner);
-      if (!byPrefix[r.prefix]) {
-        byPrefix[r.prefix] = { prefix: r.prefix, mvno: isMvno };
-        prefixes.push(byPrefix[r.prefix]);
-      } else if (isMvno) {
-        byPrefix[r.prefix].mvno = true;
+    const report = {
+      mode: mode,
+      headerMcc: digitsOnly(firstText(all, 'mcc')),
+      meta: {
+        organisation: firstText(all, 'organisationname'),
+        tadig: firstText(all, 'sendertadig'),
+        initials: firstText(all, 'countryinitials'),
+        created: firstText(all, 'filecreationtimestamp')
+      },
+      ownerSources: ownerSources,
+      containers: containers.length
+    };
+    return { records: records, report: report };
+  }
+
+  // ---- Fixed-width table copied from a PDF ----
+  function isFixedWidthHeader(line) {
+    return /\S {2,}\S/.test(line) && /(network owner|sn range start|prim\. intl\. dpc|range length)/i.test(line);
+  }
+  function parseFixedWidth(lines) {
+    const hi = lines.findIndex(isFixedWidthHeader);
+    const header = lines[hi];
+    const cols = [];
+    const re = /\S+(?: \S+)*/g;
+    let m;
+    while ((m = re.exec(header))) cols.push({ label: m[0], start: m.index, field: fieldFor(m[0]) });
+    const records = [];
+    let skipped = 0;
+    for (let i = hi + 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.trim()) continue;
+      if (isFixedWidthHeader(line)) continue; // repeated page header
+      const f = {};
+      cols.forEach(function (c, idx) {
+        const end = idx + 1 < cols.length ? cols[idx + 1].start : undefined;
+        const cell = line.slice(c.start, end).trim();
+        if (c.field && cell) f[c.field] = cell;
+      });
+      if (f.snRange && !f.snStart) Object.assign(f, splitSnRange(f.snRange) || {});
+      if (!/^\d+$/.test(digitsOnly(f.cc || ''))) { skipped++; continue; }
+      records.push(makeRecord(f, 'fixed'));
+    }
+    return { records: records, report: { mode: 'fixed', columns: cols, skipped: skipped, ownerSources: countOwnerSources(records) } };
+  }
+
+  // ---- CSV / TSV / semicolon ----
+  function splitDelimited(line, d) {
+    const out = []; let cur = '', q = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (q) {
+        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+        else if (ch === '"') q = false;
+        else cur += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === d) { out.push(cur); cur = ''; }
+      else cur += ch;
+    }
+    out.push(cur);
+    return out.map(function (s) { return s.trim(); });
+  }
+  function parseDelimited(lines) {
+    const rows = lines.filter(function (l) { return l.trim(); });
+    const first = rows[0];
+    const d = [',', ';', '\t'].map(function (c) { return { c: c, n: first.split(c).length }; }).sort(function (a, b) { return b.n - a.n; })[0].c;
+    const head = splitDelimited(first, d);
+    const mapped = head.map(fieldFor);
+    const hasHeader = mapped.filter(Boolean).length >= 2;
+    const order = hasHeader ? mapped : ['cc', 'ndc', 'snStart', 'snStop', 'rangeLength', 'owner', 'location', 'notes'];
+    const records = [];
+    let skipped = 0;
+    rows.slice(hasHeader ? 1 : 0).forEach(function (line) {
+      const cells = splitDelimited(line, d);
+      const f = {};
+      order.forEach(function (field, i) { if (field && cells[i]) f[field] = cells[i]; });
+      if (f.snRange && !f.snStart) Object.assign(f, splitSnRange(f.snRange) || {});
+      if (!/^\d+$/.test(digitsOnly(f.cc || ''))) { skipped++; return; }
+      records.push(makeRecord(f, 'delimited'));
+    });
+    const columns = head.map(function (h, i) { return { label: hasHeader ? h : 'column ' + (i + 1), field: order[i] || null }; });
+    return { records: records, report: { mode: 'delimited', delimiter: d, hasHeader: hasHeader, columns: columns, skipped: skipped, ownerSources: countOwnerSources(records) } };
+  }
+
+  // ---- Free lines: "33 64162 0000 9599 MNO" ----
+  function parseFreeLines(lines) {
+    const records = [];
+    let skipped = 0;
+    lines.forEach(function (line) {
+      if (!line.trim()) return;
+      const ownerM = line.match(/\b(MVNO|MNO|HPMN|VPMN|M2MDO)\b/i);
+      const nums = line.replace(/(\d)\s*[–—-]\s*(\d)/g, '$1 $2').match(/\d+/g) || [];
+      if (nums.length < 4) { skipped++; return; }
+      const f = { cc: nums[0], ndc: nums[1], snStart: nums[2], snStop: nums[3] };
+      if (nums[4] && nums[4].length <= 2) f.rangeLength = nums[4];
+      if (ownerM) f.owner = ownerM[1].toUpperCase();
+      records.push(makeRecord(f, 'free'));
+    });
+    return { records: records, report: { mode: 'free', skipped: skipped, ownerSources: countOwnerSources(records) } };
+  }
+  function countOwnerSources(records) {
+    const o = {};
+    records.forEach(function (r) { o[r.ownerSource] = (o[r.ownerSource] || 0) + 1; });
+    return o;
+  }
+
+  /* =====================================================================
+     Validation (six checks) and minimal covering-prefix expansion
+     ===================================================================== */
+  function validateRecord(r, headerMcc, level) {
+    const expected = headerMcc ? CC_BY_MCC.get(headerMcc) : null;
+    const c1 = /^\d{1,3}$/.test(r.cc);
+    const c2 = !headerMcc || !expected ? null : r.cc === expected.cc;
+    const c3 = /^\d{2,5}$/.test(r.ndc);
+    const c4 = /^\d+$/.test(r.snStart) && /^\d+$/.test(r.snStop) && r.snStart.length === r.snStop.length;
+    const prefixStart = r.cc + r.ndc + r.snStart, prefixEnd = r.cc + r.ndc + r.snStop;
+    const len = parseInt(r.rangeLength, 10);
+    const c5 = r.rangeLength === '' ? null : (prefixStart.length === len && prefixEnd.length === len);
+    const c6 = c4 ? BigInt(r.snStart) <= BigInt(r.snStop) : false;
+    const checks = [
+      { id: 1, pass: c1, text: 'CC is 1–3 digits' },
+      { id: 2, pass: c2, text: expected ? 'CC matches MCC ' + headerMcc + ' → ' + expected.cc : (headerMcc ? 'MCC ' + headerMcc + ' not in reference table' : 'no header MCC') },
+      { id: 3, pass: c3, text: 'NDC is 2–5 digits' },
+      { id: 4, pass: c4, text: 'SN start and stop present, equal length' },
+      { id: 5, pass: c5, text: c5 === null ? 'no Range Length declared' : 'prefix length ' + prefixStart.length + ' = Range Length ' + r.rangeLength },
+      { id: 6, pass: c6, text: 'SN start ≤ SN stop' }
+    ];
+    const structural = !c1 || !c3 || !c4;
+    const soft = c2 === false || c5 === false || c6 === false;
+    const status = structural ? 'err' : soft ? 'warn' : 'ok';
+    const ccStatus = !c1 ? 'err' : c2 === true ? 'ok' : c2 === false ? 'err' : 'warn';
+    const ccText = !c1 ? 'CC malformed' : c2 === true ? 'CC ' + r.cc + ' = MCC ' + headerMcc : c2 === false ? 'expected CC ' + expected.cc + ' for MCC ' + headerMcc : (headerMcc ? 'MCC ' + headerMcc + ' unknown' : 'no header MCC');
+    let prefixes = [];
+    if (!structural && c6) {
+      prefixes = level === 'ndc'
+        ? [{ prefix: r.cc + r.ndc, snFrom: r.snStart, snTo: r.snStop, block: r.snStart.length }]
+        : expandRange(r.cc, r.ndc, r.snStart, r.snStop);
+    }
+    return Object.assign({}, r, { prefixStart: prefixStart, prefixEnd: prefixEnd, checks: checks, status: status, ccStatus: ccStatus, ccText: ccText, prefixes: prefixes });
+  }
+
+  // Minimal decimal-aligned covering prefixes for SN range [start, stop] of width W.
+  // At each step take the largest block 10^e such that cur is a multiple of 10^e and the block fits in the range,
+  // emit CC + NDC + the first W−e digits of cur, then advance by 10^e.
+  function expandRange(cc, ndc, start, stop) {
+    const W = start.length;
+    const pow = [1n];
+    for (let i = 1; i <= W; i++) pow.push(pow[i - 1] * 10n);
+    let cur = BigInt(start);
+    const end = BigInt(stop);
+    const out = [];
+    while (cur <= end) {
+      let e = 0;
+      for (let t = W; t >= 1; t--) {
+        if (cur % pow[t] === 0n && cur + pow[t] - 1n <= end) { e = t; break; }
+      }
+      const padded = cur.toString().padStart(W, '0');
+      out.push({ prefix: cc + ndc + padded.slice(0, W - e), snFrom: padded, snTo: (cur + pow[e] - 1n).toString().padStart(W, '0'), block: e });
+      cur += pow[e];
+      if (out.length > 100000) break; // safety valve for absurd input
+    }
+    return out;
+  }
+
+  /* =====================================================================
+     Duplicate handling. Pure: input validated rows, output annotated rows.
+     kind: kept | exact | contained | adjacent | merged
+     ===================================================================== */
+  function dedupRanges(rows, opts) {
+    const out = rows.map(function (r) { return Object.assign({}, r, { kind: 'kept', parentId: null }); });
+    const byId = new Map(out.map(function (r) { return [r.id, r]; }));
+
+    if (opts.exact) {
+      const seen = new Map();
+      out.forEach(function (r) {
+        const key = [r.cc, r.ndc, r.snStart, r.snStop].join('|');
+        if (seen.has(key)) { r.kind = 'exact'; r.parentId = seen.get(key); }
+        else seen.set(key, r.id);
+      });
+    }
+
+    // Group comparable rows (numeric SN, start ≤ stop) by CC + NDC + SN width.
+    const groups = new Map();
+    out.forEach(function (r) {
+      if (r.kind !== 'kept' || r.status === 'err' || BigInt(r.snStart) > BigInt(r.snStop)) return;
+      const key = r.cc + '|' + r.ndc + '|' + r.snStart.length;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(r);
+    });
+    const merged = [];
+    let mergeNo = 1;
+    groups.forEach(function (list) {
+      list.sort(function (a, b) {
+        const sa = BigInt(a.snStart), sb = BigInt(b.snStart);
+        if (sa !== sb) return sa < sb ? -1 : 1;
+        const ea = BigInt(a.snStop), eb = BigInt(b.snStop);
+        return ea === eb ? 0 : (ea > eb ? -1 : 1); // wider first
+      });
+      if (opts.contained) {
+        const covering = [];
+        list.forEach(function (r) {
+          const s = BigInt(r.snStart), e = BigInt(r.snStop);
+          const parent = covering.find(function (k) { return BigInt(k.snStart) <= s && BigInt(k.snStop) >= e; });
+          if (parent) { r.kind = 'contained'; r.parentId = parent.id; }
+          else covering.push(r);
+        });
+      }
+      if (opts.adjacent) {
+        const kept = list.filter(function (r) { return r.kind === 'kept'; });
+        let run = [];
+        function flush() {
+          if (run.length < 2) { run = []; return; }
+          const first = run[0], last = run[run.length - 1];
+          const owners = Array.from(new Set(run.map(function (r) { return r.owner; })));
+          const m = makeRecord({
+            cc: first.cc, ndc: first.ndc, snStart: first.snStart, snStop: last.snStop,
+            rangeLength: first.rangeLength, owner: owners.length === 1 ? first.ownerRaw : first.ownerRaw,
+            ownerSource: 'merged', location: first.location, network: first.network,
+            notes: 'Merged from #' + run.map(function (r) { return r.id; }).join(', #') + (owners.length > 1 ? ' (mixed owners: ' + owners.join('/') + ')' : '')
+          }, 'merged');
+          const mid = 'M' + (mergeNo++);
+          const mv = Object.assign({}, validateRecord(m, opts.headerMcc, opts.level), { id: mid, kind: 'merged', parentId: null, mergedFrom: run.map(function (r) { return r.id; }) });
+          run.forEach(function (r) { r.kind = 'adjacent'; r.parentId = mid; });
+          merged.push({ after: first.id, row: mv });
+          run = [];
+        }
+        kept.forEach(function (r) {
+          if (run.length && BigInt(r.snStart) === BigInt(run[run.length - 1].snStop) + 1n) run.push(r);
+          else { flush(); run = [r]; }
+        });
+        flush();
       }
     });
-    prefixes.sort(function (a, b) {
-      return a.prefix.length - b.prefix.length || (a.prefix < b.prefix ? -1 : a.prefix > b.prefix ? 1 : 0);
+    // Place merged rows right after their first constituent.
+    merged.forEach(function (m) {
+      const idx = out.findIndex(function (r) { return r.id === m.after; });
+      out.splice(idx + 1, 0, m.row);
     });
-    var hasMvno = prefixes.some(function (p) { return p.mvno; });
-
-    return { prefixes: prefixes, hasMvno: hasMvno, ranges: ranges, operator: operator, tadig: tadig, created: created };
+    return out;
   }
 
-  function outputName(inputName) {
-    return inputName.replace(/\.xml$/i, '') + ' Prefix.xlsx';
+  // Unique prefixes across kept rows, with ×N shared count.
+  function buildPrefixIndex(rows) {
+    const map = new Map();
+    rows.forEach(function (r) {
+      if (r.kind !== 'kept' && r.kind !== 'merged') return;
+      r.prefixes.forEach(function (p) {
+        if (!map.has(p.prefix)) map.set(p.prefix, { prefix: p.prefix, items: [] });
+        map.get(p.prefix).items.push({ row: r, p: p });
+      });
+    });
+    const rank = { ok: 0, warn: 1, err: 2 };
+    return Array.from(map.values()).map(function (e) {
+      const owners = Array.from(new Set(e.items.map(function (i) { return i.row.owner; })));
+      const worst = e.items.reduce(function (w, i) { return rank[i.row.ccStatus] > rank[w] ? i.row.ccStatus : w; }, 'ok');
+      return { prefix: e.prefix, shared: e.items.length, owners: owners, mvno: owners.indexOf('MVNO') !== -1, ccStatus: worst, first: e.items[0], parents: e.items.map(function (i) { return i.row; }) };
+    }).sort(function (a, b) { return a.prefix < b.prefix ? -1 : a.prefix > b.prefix ? 1 : 0; });
   }
 
-  // Column B (NetworkOwner) is added only when at least one prefix belongs to an MVNO.
-  function buildWorkbook(prefixes, hasMvno) {
-    var header = hasMvno ? ['PrefixNumber', 'NetworkOwner'] : ['PrefixNumber'];
-    var rows = [header].concat(prefixes.map(function (p) {
-      return hasMvno ? [Number(p.prefix), p.mvno ? 'MVNO' : ''] : [Number(p.prefix)];
-    }));
-    var ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{ wch: 14 }, { wch: 14 }];
-    var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-    return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  /* =====================================================================
+     XLSX writer (no library): a stored ZIP with the minimal OOXML parts.
+     ===================================================================== */
+  let CRC_TABLE = null;
+  function crc32(bytes) {
+    if (!CRC_TABLE) {
+      CRC_TABLE = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; CRC_TABLE[n] = c >>> 0; }
+    }
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function zipStore(files) {
+    const enc = new TextEncoder();
+    const parts = [], central = [];
+    let offset = 0;
+    const dosDate = ((2026 - 1980) << 9) | (1 << 5) | 1, dosTime = 0;
+    files.forEach(function (f) {
+      const name = enc.encode(f.name), data = typeof f.data === 'string' ? enc.encode(f.data) : f.data;
+      const crc = crc32(data);
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+      lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true); lh.setUint32(14, crc, true);
+      lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+      parts.push(new Uint8Array(lh.buffer), name, data);
+      const ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+      ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true); ch.setUint32(16, crc, true);
+      ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, name.length, true);
+      ch.setUint16(30, 0, true); ch.setUint16(32, 0, true); ch.setUint16(34, 0, true); ch.setUint16(36, 0, true); ch.setUint32(38, 0, true); ch.setUint32(42, offset, true);
+      central.push(new Uint8Array(ch.buffer), name);
+      offset += 30 + name.length + data.length;
+    });
+    let cdSize = 0;
+    central.forEach(function (p) { cdSize += p.length; });
+    const eocd = new DataView(new ArrayBuffer(22));
+    eocd.setUint32(0, 0x06054b50, true); eocd.setUint16(4, 0, true); eocd.setUint16(6, 0, true);
+    eocd.setUint16(8, files.length, true); eocd.setUint16(10, files.length, true); eocd.setUint32(12, cdSize, true); eocd.setUint32(16, offset, true); eocd.setUint16(20, 0, true);
+    const all = parts.concat(central, [new Uint8Array(eocd.buffer)]);
+    let total = 0; all.forEach(function (p) { total += p.length; });
+    const outBytes = new Uint8Array(total);
+    let pos = 0; all.forEach(function (p) { outBytes.set(p, pos); pos += p.length; });
+    return outBytes;
+  }
+  function colLetter(i) { let s = ''; i++; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+  function buildXlsx(rows, widths) {
+    const xmlEsc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+    let sheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+    if (widths && widths.length) {
+      sheet += '<cols>' + widths.map(function (w, i) { return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>'; }).join('') + '</cols>';
+    }
+    sheet += '<sheetData>';
+    rows.forEach(function (row, ri) {
+      sheet += '<row r="' + (ri + 1) + '">';
+      row.forEach(function (v, ci) {
+        if (v === '' || v == null) return;
+        const ref = colLetter(ci) + (ri + 1);
+        if (typeof v === 'number' && Number.isFinite(v)) sheet += '<c r="' + ref + '"><v>' + v + '</v></c>';
+        else sheet += '<c r="' + ref + '" t="inlineStr"><is><t>' + xmlEsc(v) + '</t></is></c>';
+      });
+      sheet += '</row>';
+    });
+    sheet += '</sheetData></worksheet>';
+    const files = [
+      { name: '[Content_Types].xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
+      { name: '_rels/.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+      { name: 'xl/workbook.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>' },
+      { name: 'xl/_rels/workbook.xml.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
+      { name: 'xl/styles.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>' },
+      { name: 'xl/worksheets/sheet1.xml', data: sheet }
+    ];
+    return zipStore(files);
   }
 
-  // ---------- Saving: Claude artifact downloads capability, else a plain browser download ----------
-  var downloadsNs = null, downloadsResolved = false;
+  /* CSV: UTF-8 with BOM, quoted when needed. */
+  function csvCell(v) { v = String(v == null ? '' : v); return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function toCsv(rows) { return '﻿' + rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n') + '\r\n'; }
+
+  /* =====================================================================
+     Workbook / CSV content for one result
+     ===================================================================== */
+  function prefixRows(index) {
+    const hasMvno = index.some(function (p) { return p.mvno; });
+    const header = hasMvno ? ['PrefixNumber', 'NetworkOwner'] : ['PrefixNumber'];
+    return { hasMvno: hasMvno, rows: [header].concat(index.map(function (p) {
+      const num = p.prefix.length <= 15 ? Number(p.prefix) : p.prefix;
+      return hasMvno ? [num, p.mvno ? 'MVNO' : ''] : [num];
+    })) };
+  }
+  function prefixCsvRows(index) {
+    const rows = [['prefix', 'owner', 'cc', 'ndc', 'sn_from', 'sn_to', 'block', 'parent_range', 'cc_check', 'status', 'notes', 'shared_count']];
+    index.forEach(function (p) {
+      const r = p.first.row, q = p.first.p;
+      rows.push([p.prefix, p.owners.join('/'), r.cc, r.ndc, q.snFrom, q.snTo, '10^' + q.block, '#' + r.id + ' ' + r.cc + ' ' + r.ndc + ' ' + r.snStart + '-' + r.snStop, p.ccStatus, r.status, r.notes, p.shared]);
+    });
+    return rows;
+  }
+
+  /* =====================================================================
+     Saving: Claude artifact downloads capability when present, else a plain browser download
+     ===================================================================== */
+  let downloadsNs = null, downloadsResolved = false;
   function getDownloads() {
     if (downloadsResolved) return Promise.resolve(downloadsNs);
-    if (!(window.claude && typeof window.claude.use === 'function')) {
-      downloadsResolved = true; return Promise.resolve(null);
-    }
-    return window.claude.use('downloads').then(function (ns) {
-      downloadsNs = ns || null; downloadsResolved = true; return downloadsNs;
-    }, function () { downloadsResolved = true; return null; });
+    if (!(window.claude && typeof window.claude.use === 'function')) { downloadsResolved = true; return Promise.resolve(null); }
+    return window.claude.use('downloads').then(function (ns) { downloadsNs = ns || null; downloadsResolved = true; return downloadsNs; },
+      function () { downloadsResolved = true; return null; });
   }
-
-  function saveFile(filename, bytes) {
+  function saveFile(filename, bytes, mime) {
     return getDownloads().then(function (dl) {
-      if (dl) {
-        return dl.save({ filename: filename, data: new Blob([bytes]) }).then(function () { return 'saved'; });
-      }
-      var blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
+      if (dl) return dl.save({ filename: filename, data: new Blob([bytes]) });
+      const blob = new Blob([bytes], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
       a.href = url; a.download = filename;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
-      return 'saved';
+    });
+  }
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+    return new Promise(function (resolve, reject) {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy') ? resolve() : reject(new Error('copy blocked')); } catch (e) { reject(e); }
+      ta.remove();
     });
   }
 
-  // ---------- Rendering ----------
-  var results = document.getElementById('results');
-  var statusEl = document.getElementById('status');
+  /* =====================================================================
+     State and rendering. Records are immutable; everything is re-derived on each option change.
+     ===================================================================== */
+  const state = { results: [], opts: { exact: true, contained: true, adjacent: false, level: 'cover', showDup: true, mcc: '' } };
+  let resultsEl, statusEl, pasteStatusEl;
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text != null) e.textContent = text;
-    return e;
+  function toast(msg) {
+    const box = document.getElementById('toasts');
+    const t = el('div', 'toast', msg);
+    box.appendChild(t);
+    setTimeout(function () { t.remove(); }, 2600);
+  }
+  function setStatus(msg, isError, target) {
+    const e = target || statusEl;
+    e.textContent = msg;
+    e.className = 'status' + (isError ? ' error' : '');
+  }
+  function outputName(inputName) { return inputName.replace(/\.(xml|csv|tsv|txt)$/i, '') + ' Prefix.xlsx'; }
+
+  function derive(result) {
+    const mcc = result.report.headerMcc || state.opts.mcc;
+    const validated = result.records.map(function (r) { return validateRecord(r, mcc, state.opts.level); });
+    const rows = dedupRanges(validated, Object.assign({}, state.opts, { headerMcc: mcc }));
+    const index = buildPrefixIndex(rows);
+    return { mcc: mcc, rows: rows, index: index };
   }
 
-  function renderResult(fileName, parsed, opts) {
-    opts = opts || {};
-    var card = el('article', 'card');
-    var head = el('div', 'card-head');
-    var title = el('div', 'title');
-    title.appendChild(el('div', 'name', outputName(fileName)));
-    var meta = [];
-    if (parsed.operator) meta.push(parsed.operator);
-    if (parsed.tadig) meta.push('TADIG ' + parsed.tadig);
-    if (parsed.created) meta.push(parsed.created.replace('T', ' ').replace('Z', ' UTC'));
-    meta.push('from ' + fileName);
+  function renderAll() {
+    resultsEl.innerHTML = '';
+    state.results.forEach(function (res) { resultsEl.appendChild(renderResult(res)); });
+  }
+
+  function renderResult(res) {
+    const d = derive(res);
+    const kept = d.rows.filter(function (r) { return r.kind === 'kept' || r.kind === 'merged'; });
+    const removed = d.rows.filter(function (r) { return r.kind !== 'kept' && r.kind !== 'merged'; });
+    const expected = d.mcc ? CC_BY_MCC.get(d.mcc) : null;
+
+    const card = el('article', 'card');
+    const head = el('div', 'card-head');
+    const title = el('div', 'title');
+    title.appendChild(el('div', 'name', outputName(res.fileName)));
+    const meta = [];
+    if (res.report.meta && res.report.meta.organisation) meta.push(res.report.meta.organisation);
+    if (res.report.meta && res.report.meta.tadig) meta.push('TADIG ' + res.report.meta.tadig);
+    if (d.mcc) meta.push('MCC ' + d.mcc + (expected ? ' → CC ' + expected.cc + ' ' + expected.country + ' (' + ((res.report.meta && res.report.meta.initials) || expected.iso) + ')' : ' (not in table)'));
+    else meta.push('no header MCC');
+    meta.push('from ' + res.fileName);
     title.appendChild(el('div', 'meta', meta.join(' · ')));
     head.appendChild(title);
 
-    if (opts.example) head.appendChild(el('span', 'pill example', 'example'));
-    if (parsed.error) {
-      head.appendChild(el('span', 'pill warn', 'not parsed'));
-    } else {
-      head.appendChild(el('span', 'pill ' + (parsed.prefixes.length ? 'ok' : 'warn'),
-        parsed.prefixes.length + (parsed.prefixes.length === 1 ? ' prefix' : ' prefixes')));
+    if (res.example) head.appendChild(el('span', 'pill example', 'example'));
+    if (res.error) head.appendChild(el('span', 'pill err', 'not parsed'));
+    else {
+      head.appendChild(el('span', 'pill ' + (d.index.length ? 'ok' : 'warn'), fmtInt(d.index.length) + (d.index.length === 1 ? ' prefix' : ' prefixes')));
+      head.appendChild(el('span', 'pill ' + (kept.length ? 'ok' : 'warn'), kept.length + ' kept'));
+      if (removed.length) head.appendChild(el('span', 'pill dup', removed.length + ' removed'));
+      const ccBad = kept.filter(function (r) { return r.ccStatus === 'err'; }).length;
+      const ccWarn = kept.filter(function (r) { return r.ccStatus === 'warn'; }).length;
+      if (ccBad) head.appendChild(el('span', 'pill err', 'CC ✕ ' + ccBad));
+      else if (ccWarn) head.appendChild(el('span', 'pill warn', 'CC ⚠ ' + ccWarn));
+      else if (kept.length) head.appendChild(el('span', 'pill ok', 'CC ✓'));
     }
 
-    var actions = el('div', 'actions');
-    var dlBtn = el('button', 'btn', 'Download .xlsx');
-    dlBtn.type = 'button';
-    dlBtn.disabled = !!parsed.error || !parsed.prefixes.length;
-    actions.appendChild(dlBtn);
+    const actions = el('div', 'actions');
+    const dlBtn = el('button', 'btn', 'Download .xlsx'); dlBtn.type = 'button';
+    const csvBtn = el('button', 'btn-ghost', 'CSV'); csvBtn.type = 'button';
+    const copyBtn = el('button', 'btn-ghost', 'Copy'); copyBtn.type = 'button';
+    dlBtn.disabled = csvBtn.disabled = copyBtn.disabled = !!res.error || !d.index.length;
+    actions.appendChild(dlBtn); actions.appendChild(csvBtn); actions.appendChild(copyBtn);
     head.appendChild(actions);
     card.appendChild(head);
 
-    if (parsed.error) {
-      card.appendChild(el('div', 'note error', parsed.error + ' Export the IR.21 again from RAEX and retry.'));
-      results.prepend(card);
-      return;
+    if (res.error) {
+      card.appendChild(el('div', 'note error', res.error));
+      return card;
     }
 
-    var body = el('div', 'card-body');
-    var left = el('div', 'prefixes');
-    left.appendChild(el('div', 'label', parsed.hasMvno ? 'Sheet1 · columns A, B' : 'Sheet1 · column A'));
-    var list = el('ul', 'prefix-list');
-    var h = el('li', 'sheet-head');
+    // Detection report
+    card.appendChild(renderReport(res, d, kept, removed));
+
+    const body = el('div', 'card-body');
+    const left = el('div', 'prefixes');
+    const pr = prefixRows(d.index);
+    left.appendChild(el('div', 'label', pr.hasMvno ? 'Sheet1 · columns A, B' : 'Sheet1 · column A'));
+    const list = el('ul', 'prefix-list');
+    const h = el('li', 'sheet-head');
     h.appendChild(el('span', null, 'PrefixNumber'));
-    if (parsed.hasMvno) h.appendChild(el('span', 'owner', 'NetworkOwner'));
+    if (pr.hasMvno) h.appendChild(el('span', 'owner', 'NetworkOwner'));
     list.appendChild(h);
-    parsed.prefixes.forEach(function (p) {
-      var li = el('li');
-      li.appendChild(el('span', null, p.prefix));
-      if (parsed.hasMvno) li.appendChild(el('span', 'owner' + (p.mvno ? ' mvno' : ''), p.mvno ? 'MVNO' : ''));
+    const LIMIT = 2000;
+    d.index.slice(0, LIMIT).forEach(function (p) {
+      const li = el('li');
+      const left1 = el('span', null, p.prefix);
+      if (p.shared > 1) { const b = el('span', 'shared', '×' + p.shared); b.title = 'claimed by ' + p.shared + ' ranges'; left1.appendChild(b); }
+      li.appendChild(left1);
+      if (pr.hasMvno) li.appendChild(el('span', 'owner' + (p.mvno ? ' mvno' : ''), p.mvno ? 'MVNO' : ''));
       list.appendChild(li);
     });
     left.appendChild(list);
+    if (d.index.length > LIMIT) left.appendChild(el('div', 'more', 'Showing ' + fmtInt(LIMIT) + ' of ' + fmtInt(d.index.length) + '. The download contains all of them.'));
     body.appendChild(left);
 
-    var right = el('div', 'ranges');
+    const right = el('div', 'ranges');
     right.appendChild(el('div', 'label', 'Source MSISDN ranges'));
-    var scroll = el('div', 'table-scroll');
-    var table = el('table');
-    var thead = el('thead'); var trh = el('tr');
-    ['Network', 'CC', 'NDC', 'SN start', 'SN stop', 'Len', 'Owner', 'Prefix'].forEach(function (t) { trh.appendChild(el('th', null, t)); });
-    thead.appendChild(trh); table.appendChild(thead);
-    var tbody = el('tbody');
-    parsed.ranges.forEach(function (r) {
-      var tr = el('tr');
-      tr.appendChild(el('td', 'net', r.network || '–'));
-      tr.appendChild(el('td', null, r.cc));
-      tr.appendChild(el('td', null, r.ndc));
-      tr.appendChild(el('td', null, r.start));
-      tr.appendChild(el('td', null, r.stop));
-      tr.appendChild(el('td', null, r.length));
-      tr.appendChild(el('td', /^MVNO$/i.test(r.owner) ? 'mvno' : null, r.owner || '–'));
-      tr.appendChild(el('td', 'prefix', r.prefix));
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-    scroll.appendChild(table);
+    const scroll = el('div', 'table-scroll');
+    scroll.appendChild(renderRangeTable(d.rows));
     right.appendChild(scroll);
     body.appendChild(right);
     card.appendChild(body);
 
-    if (!parsed.prefixes.length) {
-      card.appendChild(el('div', 'note', 'No MSISDN_NumberRanges block was found. Check that this is a RAEX IR.21 file with a RoutingInfoSection.'));
+    if (!d.rows.length) {
+      card.appendChild(el('div', 'note', 'No MSISDN ranges were found. For XML, check that the file has a RoutingInfoSection with MSISDN_NumberRanges.'));
     }
 
     dlBtn.addEventListener('click', function () {
-      dlBtn.disabled = true;
-      var original = dlBtn.textContent;
-      dlBtn.textContent = 'Preparing…';
-      var bytes;
-      try { bytes = buildWorkbook(parsed.prefixes, parsed.hasMvno); }
-      catch (e) { setStatus('Could not build the workbook: ' + e.message, true); dlBtn.disabled = false; dlBtn.textContent = original; return; }
-      saveFile(outputName(fileName), bytes).then(function () {
-        setStatus('Saved ' + outputName(fileName));
-      }, function (err) {
-        var code = err && err.code;
-        if (code === 'declined') setStatus('Download cancelled.');
-        else setStatus('Download failed' + (err && err.message ? ': ' + err.message : '.'), true);
-      }).then(function () { dlBtn.disabled = false; dlBtn.textContent = original; });
+      let bytes;
+      try { bytes = buildXlsx(pr.rows, [16, 14]); } catch (e) { setStatus('Could not build the workbook: ' + e.message, true); return; }
+      saveFile(outputName(res.fileName), bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        .then(function () { toast('Saved ' + outputName(res.fileName)); }, function (err) { toast(err && err.code === 'declined' ? 'Download cancelled' : 'Download failed'); });
     });
-
-    results.prepend(card);
+    csvBtn.addEventListener('click', function () {
+      const name = outputName(res.fileName).replace(/\.xlsx$/, '.csv');
+      saveFile(name, toCsv(prefixCsvRows(d.index)), 'text/csv;charset=utf-8')
+        .then(function () { toast('Saved ' + name); }, function (err) { toast(err && err.code === 'declined' ? 'Download cancelled' : 'Download failed'); });
+    });
+    copyBtn.addEventListener('click', function () {
+      copyText(d.index.map(function (p) { return p.prefix; }).join('\n'))
+        .then(function () { toast('Copied ' + fmtInt(d.index.length) + ' prefixes'); }, function () { toast('Clipboard blocked by the browser'); });
+    });
+    return card;
   }
 
-  function setStatus(msg, isError) {
-    statusEl.textContent = msg;
-    statusEl.className = 'status' + (isError ? ' error' : '');
+  function renderReport(res, d, kept, removed) {
+    const rep = res.report;
+    const box = el('div', 'report');
+    const modeText = {
+      'xml-msisdn': 'XML · read ' + rep.containers + ' MSISDN_NumberRanges block' + (rep.containers === 1 ? '' : 's') + ', GT / MSRN / NP ignored',
+      'xml-generic': 'XML · no MSISDN_NumberRanges found, generic CC + NDC scan used',
+      'fixed': 'Fixed-width table · ' + (rep.columns || []).filter(function (c) { return c.field; }).length + ' of ' + (rep.columns || []).length + ' columns recognised',
+      'delimited': 'Delimited (' + (rep.delimiter === '\t' ? 'tab' : rep.delimiter) + ') · ' + (rep.hasHeader ? 'header row mapped' : 'no header, positional columns'),
+      'free': 'Free-line input · best-effort CC NDC start stop'
+    }[rep.mode] || rep.mode;
+    box.appendChild(el('span', rep.mode === 'xml-generic' ? 'warn' : null, modeText));
+
+    const os = rep.ownerSources || {};
+    const found = (os.element || 0) + (os.sibling || 0), inh = os.inherited || 0, none = os.none || 0;
+    const ownerText = found || inh ? 'Owner from NetworkOwner: ' + found + (inh ? ' + ' + inh + ' inherited' : '') + (none ? ', ' + none + ' unknown' : '') : 'No NetworkOwner found';
+    box.appendChild(el('span', found || inh ? 'ok' : 'warn', ownerText));
+
+    if (removed.length) {
+      const kinds = {};
+      removed.forEach(function (r) { kinds[r.kind] = (kinds[r.kind] || 0) + 1; });
+      box.appendChild(el('span', 'dup', removed.length + ' duplicate' + (removed.length === 1 ? '' : 's') + ' removed (' + Object.keys(kinds).map(function (k) { return kinds[k] + ' ' + k; }).join(', ') + ')'));
+    }
+    if (rep.columns && rep.mode !== 'xml-msisdn') {
+      const unmapped = rep.columns.filter(function (c) { return !c.field; }).map(function (c) { return c.label; });
+      if (unmapped.length) box.appendChild(el('span', null, 'Ignored columns: ' + unmapped.join(', ')));
+    }
+    if (rep.skipped) box.appendChild(el('span', 'warn', rep.skipped + ' line' + (rep.skipped === 1 ? '' : 's') + ' skipped (no numeric CC)'));
+    const counts = { MNO: 0, MVNO: 0, OTHER: 0, UNKNOWN: 0 };
+    kept.forEach(function (r) { counts[r.owner]++; });
+    box.appendChild(el('span', null, 'MNO ' + counts.MNO + ' · MVNO ' + counts.MVNO + (counts.OTHER ? ' · other ' + counts.OTHER : '') + (counts.UNKNOWN ? ' · unknown ' + counts.UNKNOWN : '')));
+    const warn = kept.filter(function (r) { return r.status === 'warn'; }).length, err = kept.filter(function (r) { return r.status === 'err'; }).length;
+    if (warn || err) box.appendChild(el('span', err ? 'err' : 'warn', (err ? err + ' structural error' + (err === 1 ? '' : 's') : '') + (err && warn ? ', ' : '') + (warn ? warn + ' warning' + (warn === 1 ? '' : 's') : '') + ' — hover a status for details'));
+
+    if (counts.UNKNOWN) {
+      const fix = el('span');
+      fix.appendChild(document.createTextNode('Apply owner to ' + counts.UNKNOWN + ' unknown rows: '));
+      const sel = document.createElement('select');
+      ['MNO', 'MVNO', 'OTHER'].forEach(function (o) { const op = document.createElement('option'); op.value = o; op.textContent = o; sel.appendChild(op); });
+      const btn = el('button', 'btn-ghost', 'Apply'); btn.type = 'button';
+      btn.addEventListener('click', function () {
+        res.records = res.records.map(function (r) { return r.owner === 'UNKNOWN' ? Object.freeze(Object.assign({}, r, { ownerRaw: sel.value, owner: sel.value, ownerSource: 'applied' })) : r; });
+        renderAll();
+        toast('Owner ' + sel.value + ' applied');
+      });
+      fix.appendChild(sel); fix.appendChild(document.createTextNode(' ')); fix.appendChild(btn);
+      box.appendChild(fix);
+    }
+    return box;
   }
 
-  // ---------- File intake ----------
-  var exampleCard = null;
+  function renderRangeTable(rows) {
+    const table = el('table');
+    const thead = el('thead'); const trh = el('tr');
+    ['#', 'Network', 'Owner', 'CC', 'NDC', 'SN range', 'Len', 'Prefix start', 'Prefix end', 'CC', 'Status', 'Prefixes'].forEach(function (t) { trh.appendChild(el('th', null, t)); });
+    thead.appendChild(trh); table.appendChild(thead);
+    const tbody = el('tbody');
+    const ccGlyph = { ok: '✓', warn: '⚠', err: '✕' };
+    rows.forEach(function (r) {
+      const isDup = r.kind !== 'kept' && r.kind !== 'merged';
+      if (isDup && !state.opts.showDup) return;
+      const tr = el('tr', isDup ? 'dup' : null);
+      const idx = el('td', 'idx', '#' + r.id);
+      if (isDup) { idx.appendChild(document.createTextNode(' ')); idx.appendChild(el('span', 'kind', r.kind + (r.parentId != null ? ' → #' + r.parentId : ''))); }
+      if (r.kind === 'merged') { idx.appendChild(document.createTextNode(' ')); idx.appendChild(el('span', 'kind', 'merged')); }
+      tr.appendChild(idx);
+      tr.appendChild(el('td', 'net', r.network || '–'));
+      const own = el('td', r.owner === 'MVNO' ? 'mvno' : null, r.owner === 'UNKNOWN' ? '?' : r.owner);
+      if (r.ownerSource === 'inherited') { const s = el('span', 'inh', 'inh'); s.title = 'NetworkOwner inherited from an ancestor element'; own.appendChild(s); }
+      if (r.ownerRaw && r.owner !== r.ownerRaw.toUpperCase()) own.title = r.ownerRaw;
+      tr.appendChild(own);
+      tr.appendChild(el('td', null, r.cc));
+      tr.appendChild(el('td', null, r.ndc));
+      tr.appendChild(el('td', null, r.snStart + '–' + r.snStop));
+      tr.appendChild(el('td', null, r.rangeLength || '–'));
+      tr.appendChild(el('td', 'prefix', r.prefixStart));
+      tr.appendChild(el('td', 'prefix', r.prefixEnd));
+      const cc = el('td', 'cc ' + r.ccStatus, ccGlyph[r.ccStatus]); cc.title = r.ccText;
+      tr.appendChild(cc);
+      const stTd = el('td');
+      const st = el('span', 'st ' + r.status, r.status === 'ok' ? 'ok' : r.status + ' ' + r.checks.filter(function (c) { return c.pass === false; }).map(function (c) { return 'C' + c.id; }).join(','));
+      st.title = r.checks.map(function (c) { return (c.pass === true ? '✓' : c.pass === false ? '✕' : '–') + ' C' + c.id + ' ' + c.text; }).join('\n');
+      stTd.appendChild(st);
+      tr.appendChild(stTd);
+      tr.appendChild(el('td', null, isDup ? '–' : fmtInt(r.prefixes.length)));
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    return table;
+  }
+
+  /* =====================================================================
+     Intake
+     ===================================================================== */
+  function addResult(fileName, text, extra) {
+    let res;
+    try {
+      const parsed = parseInput(text, fileName);
+      res = { fileName: fileName, records: parsed.records, report: parsed.report };
+    } catch (e) {
+      res = { fileName: fileName, records: [], report: { mode: 'error' }, error: e.message };
+    }
+    Object.assign(res, extra || {});
+    state.results = state.results.filter(function (r) { return !r.example; });
+    state.results.unshift(res);
+    return res;
+  }
+
   function handleFiles(files) {
-    var list = Array.prototype.slice.call(files).filter(function (f) { return /\.xml$/i.test(f.name) || /xml/.test(f.type); });
-    if (!list.length) { setStatus('Choose an .xml file.', true); return; }
-    if (exampleCard) { exampleCard.remove(); exampleCard = null; }
+    const list = Array.prototype.slice.call(files).filter(function (f) { return /\.(xml|csv|tsv|txt)$/i.test(f.name) || /xml|csv|plain/.test(f.type); });
+    if (!list.length) { setStatus('Choose an .xml, .csv, .tsv or .txt file.', true); return; }
     setStatus('Reading ' + list.length + (list.length === 1 ? ' file…' : ' files…'));
-    var done = 0;
+    let done = 0;
     list.forEach(function (file) {
-      var reader = new FileReader();
+      const reader = new FileReader();
       reader.onload = function () {
-        var parsed;
-        try { parsed = extractPrefixes(String(reader.result)); }
-        catch (e) { parsed = { error: 'Could not read this file: ' + e.message }; }
-        renderResult(file.name, parsed);
-        if (++done === list.length) setStatus('Ready. Click Download .xlsx on a result.');
+        addResult(file.name, String(reader.result));
+        if (++done === list.length) { renderAll(); setStatus('Ready. Click Download .xlsx on a result.'); }
       };
-      reader.onerror = function () { renderResult(file.name, { error: 'The browser could not read this file.' }); };
-      reader.readAsText(file);
+      reader.onerror = function () { addResult(file.name, '', { error: 'The browser could not read this file.' }); if (++done === list.length) renderAll(); };
+      reader.readAsText(file, 'UTF-8');
     });
   }
 
-  var input = document.getElementById('file');
-  var drop = document.getElementById('drop');
-  input.addEventListener('change', function () { handleFiles(input.files); input.value = ''; });
-  ['dragenter', 'dragover'].forEach(function (ev) {
-    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); });
-  });
-  ['dragleave', 'drop'].forEach(function (ev) {
-    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); });
-  });
-  drop.addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files) handleFiles(e.dataTransfer.files); });
-  drop.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
-  document.addEventListener('dragover', function (e) { e.preventDefault(); });
-  document.addEventListener('drop', function (e) { e.preventDefault(); });
+  function init() {
+    resultsEl = document.getElementById('results');
+    statusEl = document.getElementById('status');
+    pasteStatusEl = document.getElementById('pasteStatus');
 
-  // ---------- Example at rest: the WOM Colombia IR.21 that defined the rule ----------
-  var exampleXml =
-    '<TADIGRAEXIR21 xmlns="https://infocentre.gsm.org/TADIG-RAEX-IR21"><RAEXIR21FileHeader>' +
-    '<FileCreationTimestamp>2026-09-04T14:03:24Z</FileCreationTimestamp><SenderTADIG>COLWO</SenderTADIG></RAEXIR21FileHeader>' +
-    '<OrganisationInfo><OrganisationName>WOM Colombia</OrganisationName></OrganisationInfo>' +
-    '<CCITT_E164_NumberSeries><MSISDN_NumberRanges>' +
-    '<RangeData><NumberRange><CC>57</CC><NDC>302</NDC><SN_RangeStart>4700000</SN_RangeStart><SN_RangeStop>8699999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange></RangeData>' +
-    '<RangeData><NumberRange><CC>57</CC><NDC>323</NDC><SN_RangeStart>6000000</SN_RangeStart><SN_RangeStop>9999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange></RangeData>' +
-    '<RangeData><NumberRange><CC>57</CC><NDC>324</NDC><SN_RangeStart>1000000</SN_RangeStart><SN_RangeStop>1999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange></RangeData>' +
-    '<RangeData><NumberRange><CC>57</CC><NDC>324</NDC><SN_RangeStart>7000000</SN_RangeStart><SN_RangeStop>9999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange></RangeData>' +
-    '<RangeData><NumberRange><CC>57</CC><NDC>350</NDC><SN_RangeStart>2000000</SN_RangeStart><SN_RangeStop>8999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange></RangeData>' +
-    '</MSISDN_NumberRanges><GT_NumberRanges><RangeData><NumberRange><CC>57</CC><NDC>302</NDC><SN_RangeStart>5000000</SN_RangeStart><SN_RangeStop>5000999</SN_RangeStop></NumberRange></RangeData></GT_NumberRanges>' +
-    '</CCITT_E164_NumberSeries></TADIGRAEXIR21>';
-  renderResult('IR21_COLWO_WOM Colombia_20260904140324.xml', extractPrefixes(exampleXml), { example: true });
-  exampleCard = results.firstElementChild;
-  setStatus('Showing an example from a WOM Colombia IR.21. Drop your own file to replace it.');
+    const input = document.getElementById('file');
+    const drop = document.getElementById('drop');
+    input.addEventListener('change', function () { handleFiles(input.files); input.value = ''; });
+    ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+    ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+    drop.addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files) handleFiles(e.dataTransfer.files); });
+    drop.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+    document.addEventListener('dragover', function (e) { e.preventDefault(); });
+    document.addEventListener('drop', function (e) { e.preventDefault(); });
+
+    const pasteText = document.getElementById('pasteText');
+    let pasteNo = 1;
+    document.getElementById('pasteRun').addEventListener('click', function () {
+      const text = pasteText.value;
+      if (!text.trim()) { setStatus('Paste a table first.', true, pasteStatusEl); return; }
+      const res = addResult('Pasted table ' + (pasteNo++) + '.txt', text);
+      renderAll();
+      setStatus(res.error ? res.error : res.records.length + ' range' + (res.records.length === 1 ? '' : 's') + ' read.', !!res.error, pasteStatusEl);
+    });
+    document.getElementById('pasteClear').addEventListener('click', function () { pasteText.value = ''; setStatus('', false, pasteStatusEl); });
+
+    const bind = function (id, key, prop) {
+      const node = document.getElementById(id);
+      node.addEventListener('change', function () { state.opts[key] = prop === 'checked' ? node.checked : digitsOnly(node.value) || node.value; renderAll(); });
+    };
+    bind('optExact', 'exact', 'checked'); bind('optContained', 'contained', 'checked'); bind('optAdjacent', 'adjacent', 'checked');
+    bind('optShowDup', 'showDup', 'checked'); bind('optLevel', 'level', 'value');
+    const mccInput = document.getElementById('optMcc');
+    mccInput.addEventListener('input', function () { state.opts.mcc = digitsOnly(mccInput.value); renderAll(); });
+
+    // Example at rest: the WOM Colombia IR.21 that defined the rule.
+    const exampleXml =
+      '<TADIGRAEXIR21 xmlns="https://infocentre.gsm.org/TADIG-RAEX-IR21"><RAEXIR21FileHeader>' +
+      '<FileCreationTimestamp>2026-09-04T14:03:24Z</FileCreationTimestamp><SenderTADIG>COLWO</SenderTADIG></RAEXIR21FileHeader>' +
+      '<OrganisationInfo><OrganisationName>WOM Colombia</OrganisationName><CountryInitials>COL</CountryInitials>' +
+      '<TADIGSummaryList><TADIGSummaryItem><TADIGCode>COLWO</TADIGCode><NetworkProperties><MCC>732</MCC><MNC>360</MNC><NetworkType>Terrestrial</NetworkType></NetworkProperties></TADIGSummaryItem></TADIGSummaryList>' +
+      '<NetworkList><Network><TADIGCode>COLWO</TADIGCode><NetworkName>Partners Telecom Colombia S.A.S (PTC)</NetworkName><NetworkData><RoutingInfoSection><RoutingInfo>' +
+      '<CCITT_E164_NumberSeries><MSISDN_NumberRanges>' +
+      '<RangeData><NumberRange><CC>57</CC><NDC>302</NDC><SN_RangeStart>4700000</SN_RangeStart><SN_RangeStop>8699999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange><NetworkOwner>MNO</NetworkOwner><Location>Colombia</Location></RangeData>' +
+      '<RangeData><NumberRange><CC>57</CC><NDC>323</NDC><SN_RangeStart>6000000</SN_RangeStart><SN_RangeStop>9999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange><NetworkOwner>MNO</NetworkOwner><Location>Colombia</Location></RangeData>' +
+      '<RangeData><NumberRange><CC>57</CC><NDC>324</NDC><SN_RangeStart>1000000</SN_RangeStart><SN_RangeStop>1999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange><NetworkOwner>MNO</NetworkOwner><Location>Colombia</Location></RangeData>' +
+      '<RangeData><NumberRange><CC>57</CC><NDC>324</NDC><SN_RangeStart>7000000</SN_RangeStart><SN_RangeStop>9999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange><NetworkOwner>MNO</NetworkOwner><Location>Colombia</Location></RangeData>' +
+      '<RangeData><NumberRange><CC>57</CC><NDC>350</NDC><SN_RangeStart>2000000</SN_RangeStart><SN_RangeStop>8999999</SN_RangeStop><RangeLength>12</RangeLength></NumberRange><NetworkOwner>MNO</NetworkOwner><Location>Colombia</Location></RangeData>' +
+      '</MSISDN_NumberRanges><GT_NumberRanges><RangeData><NumberRange><CC>57</CC><NDC>302</NDC><SN_RangeStart>5000000</SN_RangeStart><SN_RangeStop>5000999</SN_RangeStop></NumberRange><NetworkOwner>MNO</NetworkOwner></RangeData></GT_NumberRanges>' +
+      '</CCITT_E164_NumberSeries></RoutingInfo></RoutingInfoSection></NetworkData></Network></NetworkList></OrganisationInfo></TADIGRAEXIR21>';
+    addResult('IR21_COLWO_WOM Colombia_20260904140324.xml', exampleXml, { example: true });
+    renderAll();
+    setStatus('Showing an example from a WOM Colombia IR.21. Drop your own file to replace it.');
+  }
+
+  // Pure functions exposed for tests; the UI starts only inside a browser page.
+  if (typeof window !== 'undefined') {
+    window.IR21 = { parseInput: parseInput, validateRecord: validateRecord, expandRange: expandRange, dedupRanges: dedupRanges, buildPrefixIndex: buildPrefixIndex, buildXlsx: buildXlsx, classifyOwner: classifyOwner, toCsv: toCsv, prefixRows: prefixRows };
+  }
+  if (typeof document !== 'undefined' && document.getElementById('results')) init();
 })();
 </script>
 
