@@ -35,7 +35,7 @@ digits of the SN (where `W` is the SN width). Example: `33 64162 0000–9599` gi
 `CC + NDC` output instead.
 
 **Validation.** Six checks per range: CC is 1–3 digits; CC matches the CC derived from the
-header MCC (built-in MCC ↔ CC table); NDC is 2–5 digits; SN start and stop are present and the
+header MCC (built-in MCC ↔ CC table); NDC is 1–5 digits; SN start and stop are present and the
 same length; prefix length equals the declared Range Length; SN start ≤ SN stop. Failures of
 checks 1, 3 or 4 mark the row `err` and it produces no prefixes. Other failures mark it `warn`.
 

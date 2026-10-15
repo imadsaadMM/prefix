@@ -536,7 +536,7 @@
     const expected = headerMcc ? CC_BY_MCC.get(headerMcc) : null;
     const c1 = /^\d{1,3}$/.test(r.cc);
     const c2 = !headerMcc || !expected ? null : r.cc === expected.cc;
-    const c3 = /^\d{2,5}$/.test(r.ndc);
+    const c3 = /^\d{1,5}$/.test(r.ndc); // single-digit NDCs exist (e.g. Peru mobile NDC 9)
     const c4 = /^\d+$/.test(r.snStart) && /^\d+$/.test(r.snStop) && r.snStart.length === r.snStop.length;
     const prefixStart = r.cc + r.ndc + r.snStart, prefixEnd = r.cc + r.ndc + r.snStop;
     const len = parseInt(r.rangeLength, 10);
@@ -545,7 +545,7 @@
     const checks = [
       { id: 1, pass: c1, text: 'CC is 1–3 digits' },
       { id: 2, pass: c2, text: expected ? 'CC matches MCC ' + headerMcc + ' → ' + expected.cc : (headerMcc ? 'MCC ' + headerMcc + ' not in reference table' : 'no header MCC') },
-      { id: 3, pass: c3, text: 'NDC is 2–5 digits' },
+      { id: 3, pass: c3, text: 'NDC is 1–5 digits' },
       { id: 4, pass: c4, text: 'SN start and stop present, equal length' },
       { id: 5, pass: c5, text: c5 === null ? 'no Range Length declared' : 'prefix length ' + prefixStart.length + ' = Range Length ' + r.rangeLength },
       { id: 6, pass: c6, text: 'SN start ≤ SN stop' }
