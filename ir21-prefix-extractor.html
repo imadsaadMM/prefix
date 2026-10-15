@@ -368,6 +368,15 @@
     if (c) return c.textContent.trim();
     return attrByField(node, field);
   }
+  // Same, but also looks inside wrapper children (older schemas nest SN_RangeStart/Stop under <SN_Range>).
+  function fieldValueDeep(node, field) {
+    const v = fieldValue(node, field);
+    if (v !== undefined) return v;
+    const keys = FIELD_ALIASES[field];
+    const all = descendants(node);
+    for (let i = 0; i < all.length; i++) if (keys.indexOf(localKey(all[i])) !== -1) return all[i].textContent.trim();
+    return undefined;
+  }
   function isRangeElement(node) {
     return fieldValue(node, 'cc') !== undefined && fieldValue(node, 'ndc') !== undefined;
   }
@@ -397,8 +406,9 @@
     const ownerSources = {};
     const records = rangeEls.map(function (nr) {
       const f = {};
-      ['cc', 'ndc', 'snStart', 'snStop', 'rangeLength', 'location', 'notes'].forEach(function (k) {
-        const v = fieldValue(nr, k);
+      ['cc', 'ndc'].forEach(function (k) { f[k] = fieldValue(nr, k); });
+      ['snStart', 'snStop', 'rangeLength', 'location', 'notes'].forEach(function (k) {
+        const v = fieldValueDeep(nr, k);
         if (v !== undefined) f[k] = v;
       });
       // Owner: on the range element, else climb up to 6 ancestors looking at their direct children.
